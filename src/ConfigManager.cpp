@@ -5,35 +5,35 @@
 
 using json = nlohmann::json;
 
-// Загружает конфигурацию из JSON файла
 bool ConfigManager::loadConfig(DatabaseConfig& config) {
     std::ifstream file(configFile);
     if (!file.is_open()) {
         std::cout << "Config file not found, creating default config..." << std::endl;
         
-        // Создаем конфигурацию по умолчанию
+        config.language = "en"; // По умолчанию английский
         config.host = "localhost";
         config.port = 5432;
         config.database = "student_db";
         config.username = "postgres";
         config.password = "password";
         
-        // Сохраняем конфигурацию по умолчанию
         saveConfig(config);
+        currentConfig = config; // Сохраняем загруженную конфигурацию
         return true;
     }
     
     try {
         json j;
-        file >> j;  // Читаем JSON из файла
+        file >> j;
         
-        // Берем значения из JSON
+        config.language = j.value("language", "en");
         config.host = j.value("host", "localhost");
         config.port = j.value("port", 5432);
         config.database = j.value("database", "student_db");
         config.username = j.value("username", "postgres");
         config.password = j.value("password", "password");
         
+        currentConfig = config; // Сохраняем загруженную конфигурацию
         std::cout << "Config loaded successfully from " << configFile << std::endl;
         return true;
     } catch (const std::exception& e) {
@@ -42,22 +42,21 @@ bool ConfigManager::loadConfig(DatabaseConfig& config) {
     }
 }
 
-// Сохраняет конфигурацию в JSON файл
 bool ConfigManager::saveConfig(const DatabaseConfig& config) {
     try {
-        json j;  // Создаем JSON объект
+        json j;
         
-        // Заполняем значениями из конфигурации
+        j["language"] = config.language;
         j["host"] = config.host;
         j["port"] = config.port;
         j["database"] = config.database;
         j["username"] = config.username;
         j["password"] = config.password;
         
-        // Сохраняем в файл с красивым форматированием (отступ 4 пробела)
         std::ofstream file(configFile);
         file << j.dump(4);
         
+        currentConfig = config; // Обновляем текущую конфигурацию
         std::cout << "Config saved to " << configFile << std::endl;
         return true;
     } catch (const std::exception& e) {
@@ -66,8 +65,7 @@ bool ConfigManager::saveConfig(const DatabaseConfig& config) {
     }
 }
 
-// Проверяет существует ли файл конфигурации
 bool ConfigManager::configExists() {
     std::ifstream file(configFile);
-    return file.good();  // Возвращает true если файл существует и доступен для чтения
+    return file.good();
 }

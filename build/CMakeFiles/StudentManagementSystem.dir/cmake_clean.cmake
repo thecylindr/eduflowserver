@@ -6,6 +6,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/StudentManagementSystem.dir/src/ConfigManager.cpp.o.d"
   "CMakeFiles/StudentManagementSystem.dir/src/DatabaseService.cpp.o"
   "CMakeFiles/StudentManagementSystem.dir/src/DatabaseService.cpp.o.d"
+  "CMakeFiles/StudentManagementSystem.dir/src/LocaleManager.cpp.o"
+  "CMakeFiles/StudentManagementSystem.dir/src/LocaleManager.cpp.o.d"
   "CMakeFiles/StudentManagementSystem.dir/src/main.cpp.o"
   "CMakeFiles/StudentManagementSystem.dir/src/main.cpp.o.d"
   "bin/StudentManagementSystem"

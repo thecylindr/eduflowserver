@@ -201,6 +201,30 @@ src/DatabaseService.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/StudentManagementSystem.dir/build.make CMakeFiles/StudentManagementSystem.dir/src/DatabaseService.cpp.s
 .PHONY : src/DatabaseService.cpp.s
 
+src/LocaleManager.o: src/LocaleManager.cpp.o
+.PHONY : src/LocaleManager.o
+
+# target to build an object file
+src/LocaleManager.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/StudentManagementSystem.dir/build.make CMakeFiles/StudentManagementSystem.dir/src/LocaleManager.cpp.o
+.PHONY : src/LocaleManager.cpp.o
+
+src/LocaleManager.i: src/LocaleManager.cpp.i
+.PHONY : src/LocaleManager.i
+
+# target to preprocess a source file
+src/LocaleManager.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/StudentManagementSystem.dir/build.make CMakeFiles/StudentManagementSystem.dir/src/LocaleManager.cpp.i
+.PHONY : src/LocaleManager.cpp.i
+
+src/LocaleManager.s: src/LocaleManager.cpp.s
+.PHONY : src/LocaleManager.s
+
+# target to generate assembly for a file
+src/LocaleManager.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/StudentManagementSystem.dir/build.make CMakeFiles/StudentManagementSystem.dir/src/LocaleManager.cpp.s
+.PHONY : src/LocaleManager.cpp.s
+
 src/main.o: src/main.cpp.o
 .PHONY : src/main.o
 
@@ -243,6 +267,9 @@ help:
 	@echo "... src/DatabaseService.o"
 	@echo "... src/DatabaseService.i"
 	@echo "... src/DatabaseService.s"
+	@echo "... src/LocaleManager.o"
+	@echo "... src/LocaleManager.i"
+	@echo "... src/LocaleManager.s"
 	@echo "... src/main.o"
 	@echo "... src/main.i"
 	@echo "... src/main.s"

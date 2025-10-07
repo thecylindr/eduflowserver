@@ -11,6 +11,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/xvb/Рабочий Стол/edu/src/ApiService.cpp" "CMakeFiles/StudentManagementSystem.dir/src/ApiService.cpp.o" "gcc" "CMakeFiles/StudentManagementSystem.dir/src/ApiService.cpp.o.d"
   "/home/xvb/Рабочий Стол/edu/src/ConfigManager.cpp" "CMakeFiles/StudentManagementSystem.dir/src/ConfigManager.cpp.o" "gcc" "CMakeFiles/StudentManagementSystem.dir/src/ConfigManager.cpp.o.d"
   "/home/xvb/Рабочий Стол/edu/src/DatabaseService.cpp" "CMakeFiles/StudentManagementSystem.dir/src/DatabaseService.cpp.o" "gcc" "CMakeFiles/StudentManagementSystem.dir/src/DatabaseService.cpp.o.d"
+  "/home/xvb/Рабочий Стол/edu/src/LocaleManager.cpp" "CMakeFiles/StudentManagementSystem.dir/src/LocaleManager.cpp.o" "gcc" "CMakeFiles/StudentManagementSystem.dir/src/LocaleManager.cpp.o.d"
   "/home/xvb/Рабочий Стол/edu/src/main.cpp" "CMakeFiles/StudentManagementSystem.dir/src/main.cpp.o" "gcc" "CMakeFiles/StudentManagementSystem.dir/src/main.cpp.o.d"
   "" "bin/StudentManagementSystem" "gcc" "CMakeFiles/StudentManagementSystem.dir/link.d"
   )

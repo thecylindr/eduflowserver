@@ -87,6 +87,7 @@ add_executable(StudentManagementSystem
     src/DatabaseService.cpp
     src/ConfigManager.cpp
     src/ApiService.cpp
+    src/LocaleManager.cpp
 )
 
 # Подключение библиотек

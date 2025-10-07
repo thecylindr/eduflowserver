@@ -5,6 +5,7 @@
 #include <vector>
 
 struct DatabaseConfig {
+    std::string language = "en";
     std::string host = "localhost";
     int port = 5432;
     std::string database = "student_db";

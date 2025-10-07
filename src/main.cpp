@@ -1,11 +1,14 @@
+// main.cpp - исправленная версия
 #include <iostream>
 #include <string>
 #include <cstdlib>
 #include <limits>
 #include <iomanip>
+#include <thread>
 #include "DatabaseService.h"
 #include "ApiService.h"
 #include "ConfigManager.h"
+#include "LocaleManager.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,9 +23,19 @@ private:
     ApiService apiService;
     ConfigManager configManager;
     bool apiRunning = false;
+    std::map<std::string, std::string> locale;
 
 public:
-    Application() : apiService(dbService) {}
+    Application(const std::map<std::string, std::string>& loc) : apiService(dbService), locale(loc) {}
+
+    // Вспомогательные методы для локализации
+    std::string tr(const std::string& key) {
+        auto it = locale.find(key);
+        if (it != locale.end()) {
+            return it->second;
+        }
+        return key; // Возвращаем ключ, если перевод не найден
+    }
 
     // Очистка экрана
     void clearScreen() {
@@ -48,36 +61,99 @@ public:
         std::cout << "──────────────────────────────────────────────────────────────" << std::endl;
     }
 
+    // Смена языка
+    void changeLanguage() {
+        clearScreen();
+        drawHeader(tr("language_selection"));
+        
+        std::cout << "🌍 " << tr("select_language") << ":" << std::endl;
+        std::cout << "  1. English" << std::endl;
+        std::cout << "  2. Русский" << std::endl;
+        std::cout << std::endl << "🎯 " << tr("choose_option") << ": ";
+        
+        std::string choice;
+        std::cin >> choice;
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        
+        std::string newLanguage;
+        if (choice == "1") {
+            newLanguage = "en";
+        } else if (choice == "2") {
+            newLanguage = "ru";
+        } else {
+            showError(tr("invalid_choice"));
+            waitForEnter();
+            return;
+        }
+        
+        // Загружаем новую локализацию
+        locale = LocaleManager::loadLocale(newLanguage);
+        
+        // Обновляем конфигурацию
+        DatabaseConfig config = dbService.getCurrentConfig();
+        config.language = newLanguage;
+        configManager.saveConfig(config);
+        
+        showSuccess(tr("language_changed"));
+        waitForEnter();
+    }
+
+    // Форматирование строки меню для выравнивания
+    std::string formatMenuLine(const std::string& text, int width) {
+        if (text.length() >= width) {
+            return text.substr(0, width - 3) + "...";
+        } else {
+            return text + std::string(width - text.length(), ' ');
+        }
+    }
+
     // Отображает главное меню
     void showMainMenu() {
         while (true) {
             clearScreen();
-            drawHeader("СТУДЕНЧЕСКАЯ БАЗА ДАННЫХ");
+            drawHeader(tr("app_title"));
             
             // Статус системы
-            std::cout << "📊 СТАТУС СИСТЕМЫ:" << std::endl;
-            std::cout << "   🗄️  База данных: " << (dbService.testConnection() ? "✅ Подключена" : "❌ Отключена") << std::endl;
-            std::cout << "   🌐 API сервер: " << (apiRunning ? "✅ Запущен" : "❌ Остановлен") << std::endl;
+            std::cout << "📊 " << tr("system_status") << ":" << std::endl;
+            std::cout << "   🗄️  " << tr("database") << ": " << (dbService.testConnection() ? "✅ " + tr("connected") : "❌ " + tr("disconnected")) << std::endl;
+            std::cout << "   🌐 " << tr("api_server") << ": " << (apiRunning ? "✅ " + tr("running") : "❌ " + tr("stopped")) << std::endl;
+            
+            // Получаем текущий язык из конфигурации
+            DatabaseConfig config = dbService.getCurrentConfig();
+            std::cout << "   🌍 " << tr("language") << ": " << (config.language == "en" ? "English" : "Русский") << std::endl;
+            
             std::cout << std::endl;
             
             drawSeparator();
             
-            std::cout << "📋 ГЛАВНОЕ МЕНЮ:" << std::endl;
+            std::cout << "📋 " << tr("main_menu") << ":" << std::endl;
             std::cout << std::endl;
             
+            // Подготовка строк меню
+            std::string menu1 = "1. ⚙️  " + tr("menu_db_setup");
+            std::string menu2 = "2. 🌐  " + tr("menu_api_manage");
+            std::string menu3 = "3. 👥  " + tr("menu_students");
+            std::string menu4 = "4. 👨‍🏫 " + tr("menu_teachers");
+            std::string menu5 = "5. 🎯 " + tr("menu_groups");
+            std::string menu6 = "6. 📁 " + tr("menu_portfolios");
+            std::string menu7 = "7. ℹ️  " + tr("menu_system_info");
+            std::string menu8 = "8. 🌍 " + tr("menu_change_language");
+            std::string menuExit = "Q. 🚪 " + tr("menu_exit");
+            
             std::cout << "╔══════════════════════════════════════════════════════════╗" << std::endl;
-            std::cout << "║  1. ⚙️   Настройка базы данных                          ║" << std::endl;
-            std::cout << "║  2. 🌐  Управление API сервером                         ║" << std::endl;
-            std::cout << "║  3. 👥  Управление студентами                           ║" << std::endl;
-            std::cout << "║  4. 👨‍🏫 Управление преподавателями                      ║" << std::endl;
-            std::cout << "║  5. 🎯 Управление группами                              ║" << std::endl;
-            std::cout << "║  6. 📁 Управление портфолио                             ║" << std::endl;
-            std::cout << "║  7. ℹ️   Информация о системе                           ║" << std::endl;
-            std::cout << "║                                                          ║" << std::endl;
-            std::cout << "║  Q. 🚪 Выйти из программы                               ║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu1, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu2, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu3, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu4, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu5, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu6, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu7, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu8, 54) << "║" << std::endl;
+            std::cout << "║  " << std::string(54, ' ') << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menuExit, 54) << "║" << std::endl;
             std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
             
-            std::cout << std::endl << "🎯 Выберите опцию: ";
+            std::cout << std::endl << "🎯 " << tr("choose_option") << ": ";
             std::string choice;
             std::cin >> choice;
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -96,11 +172,13 @@ public:
                 managePortfolios();
             } else if (choice == "7") {
                 showSystemInfo();
+            } else if (choice == "8") {
+                changeLanguage();
             } else if (choice == "Q" || choice == "q") {
                 exitApplication();
                 break;
             } else {
-                showError("Неверный выбор!");
+                showError(tr("invalid_choice"));
             }
         }
     }
@@ -109,65 +187,65 @@ private:
     // Настройка базы данных
     void setupDatabase() {
         clearScreen();
-        drawHeader("НАСТРОЙКА БАЗЫ ДАННЫХ");
+        drawHeader(tr("db_config_title"));
 
         DatabaseConfig currentConfig = dbService.getCurrentConfig();
         
-        std::cout << "📄 Текущие настройки из config.json:" << std::endl;
-        std::cout << "   📍 Хост: " << currentConfig.host << std::endl;
-        std::cout << "   🚪 Порт: " << currentConfig.port << std::endl;
-        std::cout << "   🗄️  База данных: " << currentConfig.database << std::endl;
-        std::cout << "   👤 Пользователь: " << currentConfig.username << std::endl;
-        std::cout << "   🔒 Пароль: " << std::string(currentConfig.password.length(), '*') << std::endl;
+        std::cout << "📄 " << tr("current_settings") << ":" << std::endl;
+        std::cout << "   📍 " << tr("host") << ": " << currentConfig.host << std::endl;
+        std::cout << "   🚪 " << tr("port") << ": " << currentConfig.port << std::endl;
+        std::cout << "   🗄️  " << tr("database_name") << ": " << currentConfig.database << std::endl;
+        std::cout << "   👤 " << tr("username") << ": " << currentConfig.username << std::endl;
+        std::cout << "   🔒 " << tr("password") << ": " << std::string(currentConfig.password.length(), '*') << std::endl;
         
-        std::cout << std::endl << "🔄 Хотите изменить настройки? (y/N): ";
+        std::cout << std::endl << "🔄 " << tr("change_settings") << "? (y/N): ";
         std::string change;
         std::getline(std::cin, change);
         
-        if (change == "y" || change == "Y") {
-            std::cout << std::endl << "✏️  Введите новые настройки:" << std::endl;
+        if (change == "y" || change == "Y" || change == "подтверждаю" || change == "да") {
+            std::cout << std::endl << "✏️  " << tr("enter_new_settings") << ":" << std::endl;
             
-            std::cout << "   Хост [" << currentConfig.host << "]: ";
+            std::cout << "   " << tr("host") << " [" << currentConfig.host << "]: ";
             std::string host;
             std::getline(std::cin, host);
             if (!host.empty()) currentConfig.host = host;
 
-            std::cout << "   Порт [" << currentConfig.port << "]: ";
+            std::cout << "   " << tr("port") << " [" << currentConfig.port << "]: ";
             std::string portStr;
             std::getline(std::cin, portStr);
             if (!portStr.empty()) currentConfig.port = std::stoi(portStr);
 
-            std::cout << "   База данных [" << currentConfig.database << "]: ";
+            std::cout << "   " << tr("database_name") << " [" << currentConfig.database << "]: ";
             std::string db;
             std::getline(std::cin, db);
             if (!db.empty()) currentConfig.database = db;
 
-            std::cout << "   Пользователь [" << currentConfig.username << "]: ";
+            std::cout << "   " << tr("username") << " [" << currentConfig.username << "]: ";
             std::string user;
             std::getline(std::cin, user);
             if (!user.empty()) currentConfig.username = user;
 
-            std::cout << "   Пароль: ";
+            std::cout << "   " << tr("password") << ": ";
             std::string pass;
             std::getline(std::cin, pass);
             if (!pass.empty()) currentConfig.password = pass;
 
             configManager.saveConfig(currentConfig);
-            std::cout << std::endl << "✅ Настройки сохранены в config.json" << std::endl;
+            std::cout << std::endl << "✅ " << tr("settings_saved") << std::endl;
         }
 
-        std::cout << std::endl << "🔍 Проверка подключения к БД..." << std::endl;
+        std::cout << std::endl << "🔍 " << tr("testing_connection") << "..." << std::endl;
         if (dbService.testConnection()) {
-            std::cout << "✅ Подключение успешно!" << std::endl;
-            std::cout << "⚙️  Настройка таблиц..." << std::endl;
+            std::cout << "✅ " << tr("connection_success") << std::endl;
+            std::cout << "⚙️  " << tr("setting_up_tables") << "..." << std::endl;
             if (dbService.setupDatabase()) {
-                std::cout << "✅ База данных настроена!" << std::endl;
+                std::cout << "✅ " << tr("db_setup_success") << std::endl;
             } else {
-                showError("Ошибка настройки базы данных!");
+                showError(tr("db_setup_error"));
             }
         } else {
-            showError("Ошибка подключения к базе данных!");
-            std::cout << "💡 Проверьте настройки в config.json и убедитесь, что PostgreSQL запущен." << std::endl;
+            showError(tr("connection_error"));
+            std::cout << "💡 " << tr("check_settings") << std::endl;
         }
 
         waitForEnter();
@@ -176,33 +254,33 @@ private:
     // Управление API сервером
     void manageApi() {
         clearScreen();
-        drawHeader("УПРАВЛЕНИЕ API СЕРВЕРОМ");
+        drawHeader(tr("api_manage_title"));
         
         if (!apiRunning) {
-            std::cout << "🔍 Проверка подключения к базе данных..." << std::endl;
+            std::cout << "🔍 " << tr("checking_db") << "..." << std::endl;
             if (dbService.testConnection()) {
-                std::cout << "✅ База данных доступна" << std::endl;
-                std::cout << "🚀 Запуск API сервера..." << std::endl;
+                std::cout << "✅ " << tr("db_available") << std::endl;
+                std::cout << "🚀 " << tr("starting_api") << "..." << std::endl;
                 
                 if (apiService.start()) {
                     apiRunning = true;
-                    std::cout << std::endl << "🎉 API запущено успешно!" << std::endl;
-                    std::cout << "📍 Доступно по адресу: http://localhost:5000" << std::endl;
-                    std::cout << std::endl << "📡 Доступные endpoints:" << std::endl;
-                    std::cout << "   👥 GET /students   - список студентов" << std::endl;
-                    std::cout << "   👨‍🏫 GET /teachers  - список преподавателей" << std::endl;
-                    std::cout << "   🎯 GET /groups     - список групп" << std::endl;
+                    std::cout << std::endl << "🎉 " << tr("api_start_success") << std::endl;
+                    std::cout << "📍 " << tr("available_at") << ": http://localhost:5000" << std::endl;
+                    std::cout << std::endl << "📡 " << tr("available_endpoints") << ":" << std::endl;
+                    std::cout << "   👥 GET /students   - " << tr("menu_students") << std::endl;
+                    std::cout << "   👨‍🏫 GET /teachers  - " << tr("menu_teachers") << std::endl;
+                    std::cout << "   🎯 GET /groups     - " << tr("menu_groups") << std::endl;
                 } else {
-                    showError("Ошибка запуска API!");
+                    showError(tr("api_start_error"));
                 }
             } else {
-                showError("База данных недоступна!");
-                std::cout << "💡 Сначала настройте подключение к базе данных." << std::endl;
+                showError(tr("db_unavailable"));
+                std::cout << "💡 " << tr("setup_db_first") << std::endl;
             }
         } else {
             apiService.stop();
             apiRunning = false;
-            std::cout << "✅ API сервер остановлен" << std::endl;
+            std::cout << "✅ " << tr("api_stop_success") << std::endl;
         }
 
         waitForEnter();
@@ -211,16 +289,16 @@ private:
     // Управление студентами
     void manageStudents() {
         clearScreen();
-        drawHeader("УПРАВЛЕНИЕ СТУДЕНТАМИ");
+        drawHeader(tr("students_manage_title"));
 
         auto students = dbService.getStudents();
         
-        std::cout << "📊 Всего студентов: " << students.size() << std::endl;
+        std::cout << "📊 " << tr("total_students") << ": " << students.size() << std::endl;
         std::cout << std::endl;
         
         if (!students.empty()) {
             std::cout << "┌──────────┬──────────────────┬──────────────────┬──────────────────┬──────────────┬──────────────────────────┬──────────┐" << std::endl;
-            std::cout << "│   Код    │     Фамилия      │      Имя         │   Отчество       │    Телефон   │          Email           │  Группа  │" << std::endl;
+            std::cout << "│   " << tr("student_code") << "   │     " << tr("last_name") << "     │      " << tr("first_name") << "    │   " << tr("middle_name") << "   │    " << tr("phone") << "   │          " << tr("email") << "           │  " << tr("group") << "  │" << std::endl;
             std::cout << "├──────────┼──────────────────┼──────────────────┼──────────────────┼──────────────┼──────────────────────────┼──────────┤" << std::endl;
             
             for (const auto& student : students) {
@@ -235,26 +313,26 @@ private:
             
             std::cout << "└──────────┴──────────────────┴──────────────────┴──────────────────┴──────────────┴──────────────────────────┴──────────┘" << std::endl;
         } else {
-            std::cout << "📭 Студенты не найдены" << std::endl;
+            std::cout << "📭 " << tr("no_students") << std::endl;
         }
 
-        std::cout << std::endl << "💡 Для добавления студентов используйте API или прямые SQL запросы" << std::endl;
+        std::cout << std::endl << "💡 " << tr("use_api_hint") << std::endl;
         waitForEnter();
     }
 
     // Управление преподавателями
     void manageTeachers() {
         clearScreen();
-        drawHeader("УПРАВЛЕНИЕ ПРЕПОДАВАТЕЛЯМИ");
+        drawHeader(tr("teachers_manage_title"));
 
         auto teachers = dbService.getTeachers();
         
-        std::cout << "📊 Всего преподавателей: " << teachers.size() << std::endl;
+        std::cout << "📊 " << tr("total_teachers") << ": " << teachers.size() << std::endl;
         std::cout << std::endl;
         
         if (!teachers.empty()) {
             std::cout << "┌──────────┬──────────────────┬──────────────────┬──────────────────┬──────────┬──────────────────┬──────────────────────────┬──────────────┐" << std::endl;
-            std::cout << "│    ID    │     Фамилия      │      Имя         │   Отчество       │   Стаж   │ Специализация    │          Email           │    Телефон   │" << std::endl;
+            std::cout << "│    " << tr("teacher_id") << "   │     " << tr("last_name") << "     │      " << tr("first_name") << "    │   " << tr("middle_name") << "   │   " << tr("experience") << "  │ " << tr("specialization") << "   │          " << tr("email") << "           │    " << tr("phone") << "   │" << std::endl;
             std::cout << "├──────────┼──────────────────┼──────────────────┼──────────────────┼──────────┼──────────────────┼──────────────────────────┼──────────────┤" << std::endl;
             
             for (const auto& teacher : teachers) {
@@ -270,7 +348,7 @@ private:
             
             std::cout << "└──────────┴──────────────────┴──────────────────┴──────────────────┴──────────┴──────────────────┴──────────────────────────┴──────────────┘" << std::endl;
         } else {
-            std::cout << "📭 Преподаватели не найдены" << std::endl;
+            std::cout << "📭 " << tr("no_teachers") << std::endl;
         }
 
         waitForEnter();
@@ -279,16 +357,16 @@ private:
     // Управление группами
     void manageGroups() {
         clearScreen();
-        drawHeader("УПРАВЛЕНИЕ ГРУППАМИ");
+        drawHeader(tr("groups_manage_title"));
 
         auto groups = dbService.getGroups();
         
-        std::cout << "📊 Всего групп: " << groups.size() << std::endl;
+        std::cout << "📊 " << tr("total_groups") << ": " << groups.size() << std::endl;
         std::cout << std::endl;
         
         if (!groups.empty()) {
             std::cout << "┌──────────┬──────────────────────┬──────────────────┬──────────────┐" << std::endl;
-            std::cout << "│    ID    │       Название       │ Кол-во студентов │  ID учителя  │" << std::endl;
+            std::cout << "│    " << tr("group_name") << "   │       " << tr("group_name") << "      │ " << tr("student_count") << " │  " << tr("teacher_id") << "  │" << std::endl;
             std::cout << "├──────────┼──────────────────────┼──────────────────┼──────────────┤" << std::endl;
             
             for (const auto& group : groups) {
@@ -300,7 +378,7 @@ private:
             
             std::cout << "└──────────┴──────────────────────┴──────────────────┴──────────────┘" << std::endl;
         } else {
-            std::cout << "📭 Группы не найдены" << std::endl;
+            std::cout << "📭 " << tr("no_groups") << std::endl;
         }
 
         waitForEnter();
@@ -309,16 +387,16 @@ private:
     // Управление портфолио
     void managePortfolios() {
         clearScreen();
-        drawHeader("УПРАВЛЕНИЕ ПОРТФОЛИО");
+        drawHeader(tr("portfolios_manage_title"));
 
         auto portfolios = dbService.getPortfolios();
         
-        std::cout << "📊 Всего портфолио: " << portfolios.size() << std::endl;
+        std::cout << "📊 " << tr("total_portfolios") << ": " << portfolios.size() << std::endl;
         std::cout << std::endl;
         
         if (!portfolios.empty()) {
             std::cout << "┌──────────────┬──────────────┬────────────────────┬────────────┬────────────────┬────────────────┐" << std::endl;
-            std::cout << "│   ID портф.  │  ID студента │   Код измерения    │    Дата    │ Серия паспорта │ Номер паспорта │" << std::endl;
+            std::cout << "│   " << tr("portfolio_id") << "  │  " << tr("student_id") << " │   " << tr("measure_code") << "   │    " << tr("date") << "    │ " << tr("passport_series") << " │ " << tr("passport_number") << " │" << std::endl;
             std::cout << "├──────────────┼──────────────┼────────────────────┼────────────┼────────────────┼────────────────┤" << std::endl;
             
             for (const auto& portfolio : portfolios) {
@@ -332,7 +410,7 @@ private:
             
             std::cout << "└──────────────┴──────────────┴────────────────────┴────────────┴────────────────┴────────────────┘" << std::endl;
         } else {
-            std::cout << "📭 Портфолио не найдены" << std::endl;
+            std::cout << "📭 " << tr("no_portfolios") << std::endl;
         }
 
         waitForEnter();
@@ -341,27 +419,28 @@ private:
     // Информация о системе
     void showSystemInfo() {
         clearScreen();
-        drawHeader("ИНФОРМАЦИЯ О СИСТЕМЕ");
+        drawHeader(tr("system_info_title"));
         
         std::cout << "╔══════════════════════════════════════════════════════════╗" << std::endl;
         std::cout << "║                 Student Management System                ║" << std::endl;
         std::cout << "╠══════════════════════════════════════════════════════════╣" << std::endl;
-        std::cout << "║  🎯 Версия: 1.0                                          ║" << std::endl;
-        std::cout << "║  🖥️  Поддержка: Windows/Linux                            ║" << std::endl;
-        std::cout << "║  🗄️  База данных: PostgreSQL 12+                         ║" << std::endl;
-        std::cout << "║  💻 Язык программирования: C++17                         ║" << std::endl;
-        std::cout << "║  📚 Используемые библиотеки:                             ║" << std::endl;
-        std::cout << "║     • libpq (PostgreSQL client)                          ║" << std::endl;
-        std::cout << "║     • nlohmann/json (JSON processing)                    ║" << std::endl;
+        std::cout << "║  🎯 " << tr("app_title") << ": 1.0                                  ║" << std::endl;
+        std::cout << "║  🖥️  Platform: Windows/Linux                            ║" << std::endl;
+        std::cout << "║  🗄️  Database: PostgreSQL 12+                           ║" << std::endl;
+        std::cout << "║  💻 Programming Language: C++17                         ║" << std::endl;
+        std::cout << "║  📚 Used Libraries:                                     ║" << std::endl;
+        std::cout << "║     • libpq (PostgreSQL client)                         ║" << std::endl;
+        std::cout << "║     • nlohmann/json (JSON processing)                   ║" << std::endl;
         std::cout << "║                                                          ║" << std::endl;
-        std::cout << "║  🚀 Основные функции:                                    ║" << std::endl;
-        std::cout << "║     • Управление студентами и группами                   ║" << std::endl;
-        std::cout << "║     • Управление преподавателями                         ║" << std::endl;
-        std::cout << "║     • Ведение портфолио студентов                        ║" << std::endl;
-        std::cout << "║     • REST API для интеграции                            ║" << std::endl;
-        std::cout << "║     • Кросс-платформенность                              ║" << std::endl;
+        std::cout << "║  🚀 Main Features:                                      ║" << std::endl;
+        std::cout << "║     • " << tr("menu_students") << "                   ║" << std::endl;
+        std::cout << "║     • " << tr("menu_teachers") << "                ║" << std::endl;
+        std::cout << "║     • " << tr("menu_groups") << "                      ║" << std::endl;
+        std::cout << "║     • " << tr("menu_portfolios") << "                   ║" << std::endl;
+        std::cout << "║     • REST API for integration                          ║" << std::endl;
+        std::cout << "║     • Cross-platform                                    ║" << std::endl;
         std::cout << "║                                                          ║" << std::endl;
-        std::cout << "║  📞 Разработчик: Столбов Дмитрий Олегович                ║" << std::endl;
+        std::cout << "║  📞 Developer: Dmitry Stolbov                           ║" << std::endl;
         std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
 
         waitForEnter();
@@ -370,27 +449,27 @@ private:
     // Выход из приложения
     void exitApplication() {
         clearScreen();
-        drawHeader("ВЫХОД ИЗ ПРОГРАММЫ");
+        drawHeader(tr("exit_title"));
         
         if (apiRunning) {
-            std::cout << "🛑 Остановка API сервера..." << std::endl;
+            std::cout << "🛑 " << tr("stopping_api") << "..." << std::endl;
             apiService.stop();
             apiRunning = false;
-            std::cout << "✅ API сервер остановлен" << std::endl;
+            std::cout << "✅ " << tr("api_stop_success") << std::endl;
         }
         
-        std::cout << std::endl << "👋 Спасибо за использование системы! До свидания!" << std::endl;
+        std::cout << std::endl << "👋 " << tr("thank_you") << std::endl;
         std::cout << std::endl;
     }
 
     // Вспомогательные методы
     void waitForEnter() {
-        std::cout << std::endl << "↵ Нажмите Enter для продолжения..." << std::endl;
+        std::cout << std::endl << "↵ " << tr("press_enter") << std::endl;
         std::cin.get();
     }
 
     void showError(const std::string& message) {
-        std::cout << "❌ Ошибка: " << message << std::endl;
+        std::cout << "❌ " << tr("error") << ": " << message << std::endl;
     }
 
     void showSuccess(const std::string& message) {
@@ -406,11 +485,35 @@ int main() {
 #endif
 
     try {
-        Application app;
+        // Проверка файлов локализации
+        std::cout << "🌍 Checking localization files..." << std::endl;
+        if (!LocaleManager::checkLocales()) {
+            std::cout << "❌ Localization files missing. Please make sure lang/locale_en.json and lang/locale_ru.json exist." << std::endl;
+            return 1;
+        }
+
+        // Загружаем конфигурацию для определения языка
+        ConfigManager configManager;
+        DatabaseConfig config;
+        configManager.loadConfig(config);
+        
+        // Загружаем локализацию на основе конфигурации
+        std::map<std::string, std::string> currentLocale = LocaleManager::loadLocale(config.language);
+        
+        // Если не удалось загрузить локализацию, выходим
+        if (currentLocale.empty()) {
+            std::cerr << "❌ Failed to load localization for language: " << config.language << std::endl;
+            return 1;
+        }
+
+        std::cout << std::endl << "🚀 Starting application..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        Application app(currentLocale);
         app.showMainMenu();
     } catch (const std::exception& e) {
-        std::cerr << "💥 Критическая ошибка: " << e.what() << std::endl;
-        std::cout << "↵ Нажмите Enter для выхода..." << std::endl;
+        std::cerr << "💥 Critical error: " << e.what() << std::endl;
+        std::cout << "Press Enter to exit..." << std::endl;
         std::cin.get();
         return 1;
     }
