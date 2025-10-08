@@ -3,183 +3,286 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo    Сборка Student Management System
-echo    (MSYS2 + MinGW64) - Кроссплатформенная
+echo    📥 Auto Download Resources - Student Management
 echo ========================================
 echo.
 
-:: Проверяем PostgreSQL
-set "PG_PATH=C:\Program Files\PostgreSQL\17"
-if not exist "%PG_PATH%\include\libpq-fe.h" (
-    echo ❌ ОШИБКА: PostgreSQL 17 не найден!
-    echo.
-    echo Установите PostgreSQL 17 в C:\Program Files\PostgreSQL\17
-    echo Скачайте: https://www.postgresql.org/download/windows/
-    echo.
-    pause
-    exit /b 1
+:: Configuration
+set "ROOT_DIR=%~dp0"
+set "BUILD_TOOLS=%ROOT_DIR%build_tools"
+set "CACHE_DIR=%ROOT_DIR%cache"
+set "LOGS_DIR=%ROOT_DIR%logs"
+
+:: Create directories
+for %%d in ("!BUILD_TOOLS!" "!CACHE_DIR!" "!LOGS_DIR!") do (
+    if not exist "%%d" mkdir "%%d" >nul 2>&1
 )
-echo ✅ PostgreSQL 17 найден
 
-:: Проверяем MSYS2
-set "MSYS2_PATH=C:\msys64"
-set "MINGW64_PATH=%MSYS2_PATH%\mingw64\bin"
+:: Function to download and extract files
+:download_and_extract
+set "URL=%~1"
+set "OUTPUT=%~2"
+set "EXTRACT_DIR=%~3"
+set "CHECK_FILE=%~4"
 
-if not exist "%MSYS2_PATH%\msys2_shell.cmd" (
-    echo ❌ MSYS2 не найден!
-    echo Установите MSYS2: https://www.msys2.org/
-    pause
-    exit /b 1
+echo.
+echo 📥 Downloading: !OUTPUT!
+
+if not exist "!CACHE_DIR!\!OUTPUT!" (
+    powershell -Command "Invoke-WebRequest -Uri '!URL!' -OutFile '!CACHE_DIR!\!OUTPUT!'" >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo ❌ Download failed: !OUTPUT!
+        exit /b 1
+    )
 )
-echo ✅ MSYS2 найден: %MSYS2_PATH%
 
-:: Проверяем MinGW64 в MSYS2
-echo Проверка MinGW64 в MSYS2...
-if not exist "%MINGW64_PATH%\g++.exe" (
-    echo ❌ MinGW64 не найден в MSYS2!
+if not "!EXTRACT_DIR!"=="" (
+    if not exist "!BUILD_TOOLS!\!EXTRACT_DIR!\!CHECK_FILE!" (
+        echo 🗜️ Extracting: !OUTPUT!
+        if "!OUTPUT:~-4!"==".zip" (
+            powershell -Command "Expand-Archive -Path '!CACHE_DIR!\!OUTPUT!' -DestinationPath '!BUILD_TOOLS!\!EXTRACT_DIR!' -Force" >nul 2>&1
+        ) else if "!OUTPUT:~-7!"==".tar.gz" (
+            cd !BUILD_TOOLS!
+            tar -xzf "!CACHE_DIR!\!OUTPUT!" >nul 2>&1
+        )
+        
+        if exist "!BUILD_TOOLS!\!EXTRACT_DIR!\!CHECK_FILE!" (
+            echo ✅ Extracted: !EXTRACT_DIR!
+        ) else (
+            echo ❌ Extraction failed: !EXTRACT_DIR!
+            exit /b 1
+        )
+    ) else (
+        echo ✅ Already exists: !EXTRACT_DIR!
+    )
+) else (
+    echo ✅ Downloaded: !OUTPUT!
+)
+
+exit /b 0
+
+:: PostgreSQL Installation
+echo ========================================
+echo    🗃️ POSTGRESQL SETUP
+echo ========================================
+
+set "PG_VERSION=17.2-1"
+set "PG_DIR=!BUILD_TOOLS!\pgsql"
+
+if not exist "!PG_DIR!\bin\psql.exe" (
     echo.
-    echo Установка MinGW64 в MSYS2...
-    echo.
+    echo 📥 Installing PostgreSQL...
     
-    :: Создаем скрипт для установки MinGW64 в MSYS2
-    echo Создание установочного скрипта...
+    call :download_and_extract "https://get.enterprisedb.com/postgresql/postgresql-!PG_VERSION!-windows-x64-binaries.zip" "postgresql-!PG_VERSION!-windows.zip" "pgsql" "bin\psql.exe"
+    
+    if !errorlevel! neq 0 (
+        echo ❌ PostgreSQL installation failed
+        pause
+        exit /b 1
+    )
+    
+    :: Initialize database
+    echo 🗃️ Initializing database...
+    if not exist "!PG_DIR!\data" mkdir "!PG_DIR!\data"
+    "!PG_DIR!\bin\initdb.exe" -D "!PG_DIR!\data" -U postgres --encoding=UTF8 --no-locale --auth=trust >nul 2>&1
+    
+    :: Create startup script
     (
         echo @echo off
         echo chcp 65001 ^>nul
-        echo echo Установка MinGW64 в MSYS2...
-        echo echo.
-        echo echo Запуск MSYS2 для установки компилятора...
-        echo echo Это может занять несколько минут...
-        echo echo.
-        echo "%MSYS2_PATH%\msys2_shell.cmd" -mingw64 -defterm -c "pacman -S --needed --noconfirm mingw-w64-x86_64-gcc"
-        echo echo.
-        echo echo ✅ MinGW64 установлен!
-        echo echo Закройте это окно и запустите build_program.bat снова
-        echo pause
-    ) > install_mingw64.bat
+        echo echo Starting PostgreSQL...
+        echo "!PG_DIR!\bin\pg_ctl.exe" -D "!PG_DIR!\data" -l "!LOGS_DIR!\postgres.log" start
+        echo timeout /t 3 ^>nul
+        echo echo PostgreSQL started on port 5432
+    ) > "!BUILD_TOOLS!\start_postgres.bat"
     
-    echo Запуск установки MinGW64...
-    echo.
-    echo В открывшемся окне MSYS2:
-    echo 1. Дождитесь завершения установки
-    echo 2. Закройте окно MSYS2
-    echo 3. Запустите build_program.bat снова
-    echo.
-    timeout /t 3 >nul
-    start install_mingw64.bat
-    exit /b 0
+    (
+        echo @echo off
+        echo chcp 65001 ^>nul
+        echo echo Stopping PostgreSQL...
+        echo "!PG_DIR!\bin\pg_ctl.exe" -D "!PG_DIR!\data" stop
+        echo echo PostgreSQL stopped
+    ) > "!BUILD_TOOLS!\stop_postgres.bat"
+    
+    echo ✅ PostgreSQL ready in: !PG_DIR!
+) else (
+    echo ✅ PostgreSQL already installed
 )
 
-echo ✅ MinGW64 найден: %MINGW64_PATH%
+:: Compiler Installation (MinGW-w64)
 echo.
-echo Проверка компилятора...
-"%MINGW64_PATH%\g++" --version >nul 2>&1
-if !errorlevel! neq 0 (
-    echo ❌ Ошибка: GCC не работает!
+echo ========================================
+echo    🔧 COMPILER SETUP
+echo ========================================
+
+set "MINGW_DIR=!BUILD_TOOLS!\mingw64"
+
+if not exist "!MINGW_DIR!\bin\g++.exe" (
     echo.
-    echo Переустановите MinGW64 в MSYS2:
-    echo 1. Запустите MSYS2 MinGW 64-bit
-    echo 2. Выполните: pacman -S mingw-w64-x86_64-gcc
-    echo.
-    pause
-    exit /b 1
+    echo 📥 Installing MinGW-w64 compiler...
+    
+    call :download_and_extract "https://github.com/brechtsanders/winlibs_mingw/releases/download/13.2.0-16.0.6-11.0.0-msvcrt-r2/winlibs-x86_64-posix-seh-gcc-13.2.0-llvm-16.0.6-mingw-w64msvcrt-11.0.0-r2.zip" "mingw-w64.zip" "mingw64" "bin\g++.exe"
+    
+    if !errorlevel! neq 0 (
+        echo ❌ Compiler installation failed
+        pause
+        exit /b 1
+    )
+    
+    echo ✅ Compiler ready in: !MINGW_DIR!
+) else (
+    echo ✅ Compiler already installed
 )
 
-"%MINGW64_PATH%\g++" --version | findstr "g++"
-echo ✅ Компилятор готов к работе
-
-:: Добавляем MSYS2 MinGW64 в PATH для текущей сессии
-set "PATH=%MINGW64_PATH%;%PATH%"
-
-:: Удаляем временный установочный скрипт если он существует
-if exist "install_mingw64.bat" del "install_mingw64.bat"
-
-:: Создаем папку для сборки
-mkdir build 2>nul
-cd build
-
+:: Build Tools (CMake, Ninja)
 echo.
 echo ========================================
-echo    КОМПИЛЯЦИЯ ПРОГРАММЫ
+echo    🛠️ BUILD TOOLS SETUP
 echo ========================================
-echo.
 
-:: Компилируем все файлы с определением _WIN32 для Windows
-echo [1/5] Компиляция main.cpp...
-g++ -c -I"%PG_PATH%\include" -I"../src" -std=c++17 -O2 -D_WIN32 ../src/main.cpp
-if !errorlevel! neq 0 goto :compile_error
+:: CMake
+if not exist "!BUILD_TOOLS!\cmake\bin\cmake.exe" (
+    echo.
+    echo 📥 Installing CMake...
+    
+    call :download_and_extract "https://github.com/Kitware/CMake/releases/download/v3.28.1/cmake-3.28.1-windows-x86_64.zip" "cmake-3.28.1.zip" "cmake" "bin\cmake.exe"
+    
+    if !errorlevel! neq 0 (
+        echo ❌ CMake installation failed
+    ) else (
+        echo ✅ CMake ready
+    )
+) else (
+    echo ✅ CMake already installed
+)
 
-echo [2/5] Компиляция DatabaseService.cpp...
-g++ -c -I"%PG_PATH%\include" -I"../src" -std=c++17 -O2 -D_WIN32 ../src/DatabaseService.cpp
-if !errorlevel! neq 0 goto :compile_error
+:: Ninja
+if not exist "!BUILD_TOOLS!\ninja\ninja.exe" (
+    echo.
+    echo 📥 Installing Ninja...
+    
+    call :download_and_extract "https://github.com/ninja-build/ninja/releases/latest/download/ninja-win.zip" "ninja-win.zip" "ninja" "ninja.exe"
+    
+    if !errorlevel! neq 0 (
+        echo ❌ Ninja installation failed
+    ) else (
+        echo ✅ Ninja ready
+    )
+) else (
+    echo ✅ Ninja already installed
+)
 
-echo [3/5] Компиляция ConfigManager.cpp...
-g++ -c -I"%PG_PATH%\include" -I"../src" -std=c++17 -O2 -D_WIN32 ../src/ConfigManager.cpp
-if !errorlevel! neq 0 goto :compile_error
-
-echo [4/5] Компиляция ApiService.cpp...
-g++ -c -I"%PG_PATH%\include" -I"../src" -std=c++17 -O2 -D_WIN32 ../src/ApiService.cpp
-if !errorlevel! neq 0 goto :compile_error
-
-echo [5/5] Линковка исполняемого файла...
-g++ *.o -L"%PG_PATH%\lib" -lpq -lws2_32 -lwsock32 -o StudentManagementSystem.exe
-if !errorlevel! neq 0 goto :link_error
-
-:: Копирование DLL
-echo.
-echo Копирование библиотек...
-copy "%PG_PATH%\bin\libpq.dll" . >nul 2>&1
-echo ✅ libpq.dll скопирована
-
-:: Копируем необходимые DLL из MSYS2 MinGW64
-copy "%MINGW64_PATH%\libstdc++-6.dll" . >nul 2>&1
-echo ✅ libstdc++-6.dll скопирована
-
-copy "%MINGW64_PATH%\libgcc_s_seh-1.dll" . >nul 2>&1
-echo ✅ libgcc_s_seh-1.dll скопирована
-
-copy "%MINGW64_PATH%\libwinpthread-1.dll" . >nul 2>&1
-echo ✅ libwinpthread-1.dll скопирована
-
+:: Update PATH environment
 echo.
 echo ========================================
-echo    ✅ СБОРКА УСПЕШНО ЗАВЕРШЕНА!
+echo    ⚙️ ENVIRONMENT SETUP
+echo ========================================
+
+set "PATH=!MINGW_DIR!\bin;!BUILD_TOOLS!\cmake\bin;!BUILD_TOOLS!\ninja;!PG_DIR!\bin;!PATH!"
+
+:: Verify installations
+echo.
+echo 🔍 Verifying installations...
+
+echo - Checking PostgreSQL...
+!PG_DIR!\bin\psql.exe --version >nul 2>&1
+if !errorlevel! equ 0 (
+    for /f "tokens=*" %%i in ('!PG_DIR!\bin\psql.exe --version 2^>^&1') do echo ✅ %%i
+) else (
+    echo ❌ PostgreSQL check failed
+)
+
+echo - Checking C++ compiler...
+!MINGW_DIR!\bin\g++.exe --version >nul 2>&1
+if !errorlevel! equ 0 (
+    for /f "tokens=*" %%i in ('!MINGW_DIR!\bin\g++.exe --version 2^>^&1 ^| findstr "g++"') do echo ✅ %%i
+) else (
+    echo ❌ Compiler check failed
+)
+
+echo - Checking CMake...
+if exist "!BUILD_TOOLS!\cmake\bin\cmake.exe" (
+    for /f "tokens=*" %%i in ('!BUILD_TOOLS!\cmake\bin\cmake.exe --version 2^>^&1') do echo ✅ %%i
+) else (
+    echo ❌ CMake check failed
+)
+
+echo - Checking Ninja...
+if exist "!BUILD_TOOLS!\ninja\ninja.exe" (
+    !BUILD_TOOLS!\ninja\ninja.exe --version >nul 2>&1
+    if !errorlevel! equ 0 (
+        for /f "tokens=*" %%i in ('!BUILD_TOOLS!\ninja\ninja.exe --version 2^>^&1') do echo ✅ Ninja %%i
+    )
+) else (
+    echo ❌ Ninja check failed
+)
+
+:: Create environment script
+echo.
+echo 📄 Creating environment script...
+(
+    echo @echo off
+    echo chcp 65001 ^>nul
+    echo.
+    echo echo ========================================
+    echo echo    🚀 Student Management - Development Environment
+    echo echo ========================================
+    echo echo.
+    echo.
+    echo setlocal enabledelayedexpansion
+    echo.
+    echo :: Set paths
+    echo set "ROOT_DIR=%~dp0"
+    echo set "BUILD_TOOLS=!ROOT_DIR!build_tools"
+    echo set "PG_DIR=!BUILD_TOOLS!\pgsql"
+    echo set "MINGW_DIR=!BUILD_TOOLS!\mingw64"
+    echo.
+    echo :: Update PATH
+    echo set "PATH=!MINGW_DIR!\bin;!BUILD_TOOLS!\cmake\bin;!BUILD_TOOLS!\ninja;!PG_DIR!\bin;!PATH!"
+    echo.
+    echo echo ✅ Environment loaded
+    echo echo.
+    echo echo Available commands:
+    echo echo - start_postgres.bat : Start PostgreSQL database
+    echo echo - stop_postgres.bat  : Stop PostgreSQL database
+    echo echo - g++                : C++ compiler
+    echo echo - cmake              : Build system
+    echo echo - ninja              : Build tool
+    echo echo - psql               : PostgreSQL client
+    echo.
+    echo cmd /k
+) > "dev_env.bat"
+
+:: Final report
+echo.
+echo ========================================
+echo    ✅ RESOURCE DOWNLOAD COMPLETED!
 echo ========================================
 echo.
-echo 📁 Созданные файлы:
-dir /B *.exe *.dll 2>nul
+echo 📊 Installed components:
+echo    ✅ PostgreSQL 17 (portable)
+echo    ✅ MinGW-w64 GCC compiler
+echo    ✅ CMake 3.28.1
+echo    ✅ Ninja build system
 echo.
-echo 🚀 Запуск приложения...
+echo 📁 Installation directories:
+echo    - build_tools\pgsql\     : PostgreSQL
+echo    - build_tools\mingw64\   : Compiler
+echo    - build_tools\cmake\     : CMake
+echo    - build_tools\ninja\     : Ninja
+echo    - cache\                 : Downloaded packages
+echo    - logs\                  : Log files
 echo.
-timeout /t 3 >nul
+echo 🚀 Next steps:
+echo    1. Run 'dev_env.bat' to open development environment
+echo    2. Run 'build_tools\start_postgres.bat' to start database
+echo    3. Compile your project with build scripts
+echo.
+echo ⚠️  Note: PostgreSQL is configured with:
+echo     - Username: postgres
+echo     - Password: [none - trust authentication]
+echo     - Port: 5432
+echo     - Data: build_tools\pgsql\data
+echo.
 
-StudentManagementSystem.exe
-goto :end
-
-:compile_error
-echo.
-echo ❌ ОШИБКА КОМПИЛЯЦИИ!
-echo Проверьте исходные файлы в папке src\
-goto :error
-
-:link_error
-echo.
-echo ❌ ОШИБКА ЛИНКОВКИ!
-echo Проверьте пути к библиотекам PostgreSQL
-echo Убедитесь что библиотеки ws2_32 и wsock32 доступны
-goto :error
-
-:error
-echo.
-echo Возможные решения:
-echo 1. Проверьте наличие всех исходных файлов в src\
-echo 2. Убедитесь что PostgreSQL установлен правильно
-echo 3. Проверьте что MinGW64 установлен в MSYS2
-echo 4. Убедитесь что библиотеки ws2_32 и wsock32 доступны
-echo.
-pause
-exit /b 1
-
-:end
-cd ..
 pause

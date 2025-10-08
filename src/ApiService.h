@@ -6,6 +6,7 @@
 #include <atomic>
 #include <string>
 #include <iostream>
+#include <chrono>
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -19,6 +20,7 @@
     #include <netinet/in.h>
     #include <unistd.h>
     #include <arpa/inet.h>
+    #include <cstring>
     #define SOCKET_TYPE int
     #define CLOSE_SOCKET close
     #define INVALID_SOCKET_VAL -1
@@ -38,6 +40,7 @@ private:
     std::thread serverThread;
     std::atomic<bool> running;
     SOCKET_TYPE serverSocket;
+    SOCKET_TYPE shutdownSocket;
     
     void runServer();
     void handleClient(SOCKET_TYPE clientSocket);
@@ -46,11 +49,12 @@ private:
     std::string getTeachersJson();
     std::string getGroupsJson();
     
+    // Методы для обработки регистрации и авторизации
+    std::string handleRegister(const std::string& body);
+    std::string handleLogin(const std::string& body);
+    
     void initializeNetwork();
     void cleanupNetwork();
-    
-    // Добавляем shutdown сокет для корректной остановки
-    SOCKET_TYPE shutdownSocket;
 };
 
 #endif

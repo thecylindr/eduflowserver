@@ -56,4 +56,16 @@ struct StudentPortfolio {
     std::string passportNumber;
 };
 
+struct User {
+    int userId;
+    std::string email;
+    std::string phoneNumber;
+    std::string passwordHash;
+    std::string lastName;
+    std::string firstName;
+    std::string middleName;
+  
+    User() : userId(0) {}
+};
+
 #endif

@@ -207,7 +207,7 @@ private:
         std::string change;
         std::getline(std::cin, change);
         
-        if (change == "y" || change == "Y" || change == "подтверждаю" || change == "да") {
+        if (change == "y" || change == "Y" || change == "да") {
             std::cout << std::endl << Colors::MAGENTA << "✏️  " << tr("enter_new_settings") << ":" << Colors::RESET << std::endl;
             
             std::cout << Colors::CYAN << "   " << tr("host") << " [" << currentConfig.host << "]: " << Colors::RESET;

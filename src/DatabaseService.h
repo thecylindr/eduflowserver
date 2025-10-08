@@ -17,7 +17,7 @@ public:
     
     bool testConnection();
     bool setupDatabase();
-    bool connect(const DatabaseConfig& config, bool silent = false);
+    bool connect(const DatabaseConfig& config);
     void disconnect();
     
     // CRUD операции

@@ -3,27 +3,20 @@
 #include <iostream>
 #include <sstream>
 
-// Конструктор - загружаем конфигурацию при создании объекта
 DatabaseService::DatabaseService() : connection(nullptr) {
     configManager.loadConfig(currentConfig);
 }
 
-// Деструктор - отключаемся от БД при уничтожении объекта
 DatabaseService::~DatabaseService() {
     disconnect();
 }
 
-// Подключение к базе данных с использованием конфигурации bool silent) {
-    // Если уже подключены - отключаемся сначала
-bool DatabaseService::connect(const DatabaseConfig& config, bool silent) {
-    // Если уже подключены - отключаемся сначала
+bool DatabaseService::connect(const DatabaseConfig& config) {
     if (connection) {
         disconnect();
     }
     
     currentConfig = config;
-    
-    // Формируем строку подключения для PostgreSQL
     std::string connStr = "host=" + config.host + 
                          " port=" + std::to_string(config.port) + 
                          " dbname=" + config.database + 
@@ -32,23 +25,16 @@ bool DatabaseService::connect(const DatabaseConfig& config, bool silent) {
     
     connection = PQconnectdb(connStr.c_str());
     
-    // Проверяем успешность подключения
     if (PQstatus(connection) != CONNECTION_OK) {
-        if (!silent) {
-            std::cerr << "Connection to database failed: " << PQerrorMessage(connection) << std::endl;
-        }
+        std::cerr << "Connection to database failed: " << PQerrorMessage(connection) << std::endl;
         PQfinish(connection);
         connection = nullptr;
         return false;
     }
     
-    if (!silent) {
-        std::cout << "Connected to PostgreSQL successfully!" << std::endl;
-    }
     return true;
 }
 
-// Отключение от базы данных
 void DatabaseService::disconnect() {
     if (connection) {
         PQfinish(connection);
@@ -56,47 +42,45 @@ void DatabaseService::disconnect() {
     }
 }
 
-// Тестирование подключения к БД
 bool DatabaseService::testConnection() {
-    // Загружаем актуальную конфигурацию перед тестом
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед тестом
     configManager.loadConfig(currentConfig);
     
-    if (!connection && !connect(currentConfig, true)) {  // silent = true
+    if (!connection && !connect(currentConfig)) {
         return false;
     }
     return PQstatus(connection) == CONNECTION_OK;
 }
 
-// Настройка структуры базы данных (создание таблиц)
 bool DatabaseService::setupDatabase() {
-    // Загружаем актуальную конфигурацию перед настройкой БД
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед настройкой БД
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return false;
     }
     
-    // SQL команды для создания таблиц, если они не существуют
     std::vector<std::string> sqlCommands = {
-        // Таблица преподавателей
         "CREATE TABLE IF NOT EXISTS teachers ("
         "teacher_id SERIAL PRIMARY KEY,"
         "last_name VARCHAR(100) NOT NULL,"
         "first_name VARCHAR(100) NOT NULL,"
         "middle_name VARCHAR(100),"
         "experience INTEGER NOT NULL,"
-        "specialization VARCHAR(100) NOT NULL,"
+        "specialization INTEGER NOT NULL UNIQUE,"
         "email VARCHAR(100),"
         "phone_number VARCHAR(20))",
+
+        "CREATE TABLE IF NOT EXISTS specialization_list ("
+        "specialization INTEGER REFERENCES teachers(specialization),"
+        "name VARCHAR(80) NOT NULL)",
         
-        // Таблица студенческих групп
         "CREATE TABLE IF NOT EXISTS student_groups ("
         "group_id SERIAL PRIMARY KEY,"
         "name VARCHAR(50) NOT NULL UNIQUE,"
         "student_count INTEGER DEFAULT 0,"
         "teacher_id INTEGER REFERENCES teachers(teacher_id))",
         
-        // Таблица студентов
         "CREATE TABLE IF NOT EXISTS students ("
         "student_code SERIAL PRIMARY KEY,"
         "last_name VARCHAR(100) NOT NULL,"
@@ -106,17 +90,32 @@ bool DatabaseService::setupDatabase() {
         "email VARCHAR(100),"
         "group_id INTEGER REFERENCES student_groups(group_id))",
         
-        // Таблица портфолио студентов
         "CREATE TABLE IF NOT EXISTS student_portfolio ("
         "portfolio_id SERIAL PRIMARY KEY,"
         "student_code INTEGER REFERENCES students(student_code),"
-        "measure_code VARCHAR(100) NOT NULL,"
+        "measure_code VARCHAR(100) NOT NULL UNIQUE,"
         "date DATE NOT NULL,"
         "passport_series VARCHAR(10) NOT NULL,"
-        "passport_number VARCHAR(10) NOT NULL)"
+        "passport_number VARCHAR(10) NOT NULL)",
+
+        "CREATE TABLE IF NOT EXISTS event ("
+        "event_id INTEGER REFERENCES student_portfolio(measure_code),"
+        "event_type VARCHAR(50) NOT NULL,"
+        "start_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
+        "end_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
+        "location CHARACTER VARYING(48),"
+        "lore TEXT)",
+
+        "CREATE TABLE IF NOT EXISTS users ("
+        "user_id SERIAL PRIMARY KEY,"
+        "email VARCHAR(100) UNIQUE NOT NULL,"
+        "phone_number VARCHAR(20),"
+        "password_hash VARCHAR(255) NOT NULL,"
+        "last_name VARCHAR(100) NOT NULL,"
+        "first_name VARCHAR(100) NOT NULL,"
+        "middle_name VARCHAR(100))"
     };
     
-    // Выполняем все SQL команды
     for (const auto& sql : sqlCommands) {
         executeSQL(sql);
     }
@@ -125,9 +124,8 @@ bool DatabaseService::setupDatabase() {
     return true;
 }
 
-// Выполнение SQL команды
 void DatabaseService::executeSQL(const std::string& sql) {
-    // Загружаем актуальную конфигурацию перед выполнением SQL
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед выполнением SQL
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) return;
@@ -139,11 +137,10 @@ void DatabaseService::executeSQL(const std::string& sql) {
     PQclear(res);
 }
 
-// Получение списка преподавателей
 std::vector<Teacher> DatabaseService::getTeachers() {
     std::vector<Teacher> teachers;
     
-    // Загружаем актуальную конфигурацию перед запросом
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) return teachers;
@@ -154,7 +151,6 @@ std::vector<Teacher> DatabaseService::getTeachers() {
         return teachers;
     }
     
-    // Обрабатываем каждую строку результата
     int rows = PQntuples(res);
     for (int i = 0; i < rows; i++) {
         Teacher teacher;
@@ -174,11 +170,10 @@ std::vector<Teacher> DatabaseService::getTeachers() {
     return teachers;
 }
 
-// Получение списка групп
 std::vector<StudentGroup> DatabaseService::getGroups() {
     std::vector<StudentGroup> groups;
     
-    // Загружаем актуальную конфигурацию перед запросом
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) return groups;
@@ -189,7 +184,6 @@ std::vector<StudentGroup> DatabaseService::getGroups() {
         return groups;
     }
     
-    // Обрабатываем каждую строку результата
     int rows = PQntuples(res);
     for (int i = 0; i < rows; i++) {
         StudentGroup group;
@@ -205,28 +199,22 @@ std::vector<StudentGroup> DatabaseService::getGroups() {
     return groups;
 }
 
-// Добавление студента
 bool DatabaseService::addStudent(const Student& student) {
-    // Загружаем актуальную конфигурацию перед добавлением
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return false;
     }
     
-    // Сохраняем числовые значения в отдельные переменные, чтобы избежать проблем с временными объектами
-    std::string groupIdStr = std::to_string(student.groupId);
-    
     std::string sql = "INSERT INTO students (last_name, first_name, middle_name, phone_number, email, group_id) VALUES ($1, $2, $3, $4, $5, $6)";
-    
-    // Создаем массив параметров - используем сохраненные переменные вместо временных объектов
     const char* params[6] = {
         student.lastName.c_str(),
         student.firstName.c_str(),
         student.middleName.c_str(),
         student.phoneNumber.c_str(),
         student.email.c_str(),
-        groupIdStr.c_str()  // используем сохраненную переменную вместо std::to_string(student.groupId).c_str()
+        std::to_string(student.groupId).c_str()
     };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
@@ -236,26 +224,20 @@ bool DatabaseService::addStudent(const Student& student) {
     return success;
 }
 
-// Добавление преподавателя
 bool DatabaseService::addTeacher(const Teacher& teacher) {
-    // Загружаем актуальную конфигурацию перед добавлением
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return false;
     }
     
-    // Сохраняем числовые значения в отдельные переменные
-    std::string experienceStr = std::to_string(teacher.experience);
-    
     std::string sql = "INSERT INTO teachers (last_name, first_name, middle_name, experience, specialization, email, phone_number) VALUES ($1, $2, $3, $4, $5, $6, $7)";
-    
-    // Создаем массив параметров
     const char* params[7] = {
         teacher.lastName.c_str(),
         teacher.firstName.c_str(),
         teacher.middleName.c_str(),
-        experienceStr.c_str(),
+        std::to_string(teacher.experience).c_str(),
         teacher.specialization.c_str(),
         teacher.email.c_str(),
         teacher.phoneNumber.c_str()
@@ -268,26 +250,19 @@ bool DatabaseService::addTeacher(const Teacher& teacher) {
     return success;
 }
 
-// Добавление группы
 bool DatabaseService::addGroup(const StudentGroup& group) {
-    // Загружаем актуальную конфигурацию перед добавлением
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return false;
     }
     
-    // Сохраняем числовые значения в отдельные переменные
-    std::string studentCountStr = std::to_string(group.studentCount);
-    std::string teacherIdStr = std::to_string(group.teacherId);
-    
     std::string sql = "INSERT INTO student_groups (name, student_count, teacher_id) VALUES ($1, $2, $3)";
-    
-    // Создаем массив параметров
     const char* params[3] = {
         group.name.c_str(),
-        studentCountStr.c_str(),  // используем сохраненную переменную
-        teacherIdStr.c_str()      // используем сохраненную переменную
+        std::to_string(group.studentCount).c_str(),
+        std::to_string(group.teacherId).c_str()
     };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 3, NULL, params, NULL, NULL, 0);
@@ -297,23 +272,17 @@ bool DatabaseService::addGroup(const StudentGroup& group) {
     return success;
 }
 
-// Добавление портфолио
 bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
-    // Загружаем актуальную конфигурацию перед добавлением
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return false;
     }
     
-    // Сохраняем числовые значения в отдельные переменные
-    std::string studentCodeStr = std::to_string(portfolio.studentCode);
-    
     std::string sql = "INSERT INTO student_portfolio (student_code, measure_code, date, passport_series, passport_number) VALUES ($1, $2, $3, $4, $5)";
-    
-    // Создаем массив параметров
     const char* params[5] = {
-        studentCodeStr.c_str(),  // используем сохраненную переменную
+        std::to_string(portfolio.studentCode).c_str(),
         portfolio.measureCode.c_str(),
         portfolio.date.c_str(),
         portfolio.passportSeries.c_str(),
@@ -327,11 +296,10 @@ bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
     return success;
 }
 
-// Получение списка портфолио
 std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
     std::vector<StudentPortfolio> portfolios;
     
-    // Загружаем актуальную конфигурацию перед запросом
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -344,7 +312,6 @@ std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
         return portfolios;
     }
     
-    // Обрабатываем каждую строку результата
     int rows = PQntuples(res);
     for (int i = 0; i < rows; i++) {
         StudentPortfolio portfolio;
@@ -362,11 +329,10 @@ std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
     return portfolios;
 }
 
-// Получение списка студентов
 std::vector<Student> DatabaseService::getStudents() {
     std::vector<Student> students;
 
-    // Загружаем актуальную конфигурацию перед запросом
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
 
     if (!connection && !connect(currentConfig)) {
@@ -381,7 +347,6 @@ std::vector<Student> DatabaseService::getStudents() {
         return students;
     }
 
-    // Обрабатываем каждую строку результата с проверкой на NULL значения
     int rows = PQntuples(res);
     for (int i = 0; i < rows; i++) {
         Student student;
