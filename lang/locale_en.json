@@ -87,5 +87,9 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "running": "Running",
-    "stopped": "Stopped"
+    "stopped": "Stopped",
+    "api_already_running": "API server is already running",
+    "stop_api_prompt": "Do you want to stop the API server?",
+    "api_keep_running": "API server will continue running",
+    "available_at": "Available at"
 }

@@ -13,8 +13,9 @@ DatabaseService::~DatabaseService() {
     disconnect();
 }
 
-// Подключение к базе данных с использованием конфигурации
-bool DatabaseService::connect(const DatabaseConfig& config) {
+// Подключение к базе данных с использованием конфигурации bool silent) {
+    // Если уже подключены - отключаемся сначала
+bool DatabaseService::connect(const DatabaseConfig& config, bool silent) {
     // Если уже подключены - отключаемся сначала
     if (connection) {
         disconnect();
@@ -33,13 +34,17 @@ bool DatabaseService::connect(const DatabaseConfig& config) {
     
     // Проверяем успешность подключения
     if (PQstatus(connection) != CONNECTION_OK) {
-        std::cerr << "Connection to database failed: " << PQerrorMessage(connection) << std::endl;
+        if (!silent) {
+            std::cerr << "Connection to database failed: " << PQerrorMessage(connection) << std::endl;
+        }
         PQfinish(connection);
         connection = nullptr;
         return false;
     }
     
-    std::cout << "Connected to PostgreSQL successfully!" << std::endl;
+    if (!silent) {
+        std::cout << "Connected to PostgreSQL successfully!" << std::endl;
+    }
     return true;
 }
 
@@ -56,7 +61,7 @@ bool DatabaseService::testConnection() {
     // Загружаем актуальную конфигурацию перед тестом
     configManager.loadConfig(currentConfig);
     
-    if (!connection && !connect(currentConfig)) {
+    if (!connection && !connect(currentConfig, true)) {  // silent = true
         return false;
     }
     return PQstatus(connection) == CONNECTION_OK;

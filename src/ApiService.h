@@ -48,6 +48,9 @@ private:
     
     void initializeNetwork();
     void cleanupNetwork();
+    
+    // Добавляем shutdown сокет для корректной остановки
+    SOCKET_TYPE shutdownSocket;
 };
 
 #endif

@@ -87,5 +87,9 @@
     "connected": "Подключено",
     "disconnected": "Отключено",
     "running": "Запущен",
-    "stopped": "Остановлен"
+    "stopped": "Остановлен",
+    "api_already_running": "API сервер уже запущен",
+    "stop_api_prompt": "Вы хотите остановить API сервер?",
+    "api_keep_running": "API сервер продолжит работу",
+    "available_at": "Доступен по адресу"
 }

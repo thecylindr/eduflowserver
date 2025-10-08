@@ -10,7 +10,7 @@ bool ConfigManager::loadConfig(DatabaseConfig& config) {
     if (!file.is_open()) {
         std::cout << "Config file not found, creating default config..." << std::endl;
         
-        config.language = "en"; // По умолчанию английский
+        config.language = "en"; 
         config.host = "localhost";
         config.port = 5432;
         config.database = "student_db";
@@ -18,7 +18,7 @@ bool ConfigManager::loadConfig(DatabaseConfig& config) {
         config.password = "password";
         
         saveConfig(config);
-        currentConfig = config; // Сохраняем загруженную конфигурацию
+        currentConfig = config;
         return true;
     }
     
@@ -33,8 +33,8 @@ bool ConfigManager::loadConfig(DatabaseConfig& config) {
         config.username = j.value("username", "postgres");
         config.password = j.value("password", "password");
         
-        currentConfig = config; // Сохраняем загруженную конфигурацию
-        std::cout << "Config loaded successfully from " << configFile << std::endl;
+        currentConfig = config;
+        //std::cout << "Config loaded successfully from " << configFile << std::endl;
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error loading config: " << e.what() << std::endl;

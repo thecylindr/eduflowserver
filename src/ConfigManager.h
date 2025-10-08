@@ -13,7 +13,7 @@ public:
     
 private:
     std::string configFile = "config.json";
-    DatabaseConfig currentConfig; // Добавлено хранение конфигурации
+    DatabaseConfig currentConfig;
 };
 
 #endif

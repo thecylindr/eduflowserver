@@ -1,3 +1,0 @@
-/home/xvb/Рабочий Стол/edu/build/CMakeFiles/StudentManagementSystem.dir
-/home/xvb/Рабочий Стол/edu/build/CMakeFiles/edit_cache.dir
-/home/xvb/Рабочий Стол/edu/build/CMakeFiles/rebuild_cache.dir

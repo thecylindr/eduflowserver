@@ -3,10 +3,17 @@
 #include <sstream>
 #include <cstring>
 
+// Добавляем необходимые заголовки для Linux
+#ifndef _WIN32
+    #include <fcntl.h>
+    #include <errno.h>
+#endif
+
 using json = nlohmann::json;
 
 ApiService::ApiService(DatabaseService& dbService) 
-    : dbService(dbService), running(false), serverSocket(INVALID_SOCKET_VAL) {
+    : dbService(dbService), running(false), 
+      serverSocket(INVALID_SOCKET_VAL), shutdownSocket(INVALID_SOCKET_VAL) {
     initializeNetwork();
 }
 
@@ -44,11 +51,25 @@ bool ApiService::start() {
         return false;
     }
     
-    // Set socket options
+    // Set socket options for non-blocking behavior
     int opt = 1;
 #ifdef _WIN32
+    u_long mode = 1; // non-blocking
+    ioctlsocket(serverSocket, FIONBIO, &mode);
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
 #else
+    // Исправленный код для Linux
+    int flags = fcntl(serverSocket, F_GETFL, 0);
+    if (flags == -1) {
+        std::cerr << "fcntl F_GETFL failed" << std::endl;
+        CLOSE_SOCKET(serverSocket);
+        return false;
+    }
+    if (fcntl(serverSocket, F_SETFL, flags | O_NONBLOCK) == -1) {
+        std::cerr << "fcntl F_SETFL failed" << std::endl;
+        CLOSE_SOCKET(serverSocket);
+        return false;
+    }
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 #endif
     
@@ -84,7 +105,24 @@ void ApiService::stop() {
     
     running = false;
     
-    // Close socket to break out of accept
+    // Создаем временное соединение чтобы разблокировать accept()
+    shutdownSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (shutdownSocket != INVALID_SOCKET_VAL) {
+        sockaddr_in serverAddr;
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        serverAddr.sin_port = htons(5000);
+        
+        connect(shutdownSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
+        
+        // Даем время на обработку
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        CLOSE_SOCKET(shutdownSocket);
+        shutdownSocket = INVALID_SOCKET_VAL;
+    }
+    
+    // Закрываем серверный сокет
     if (serverSocket != INVALID_SOCKET_VAL) {
         CLOSE_SOCKET(serverSocket);
         serverSocket = INVALID_SOCKET_VAL;
@@ -107,17 +145,28 @@ void ApiService::runServer() {
 #endif
         
         SOCKET_TYPE clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrLen);
+        
+        // Проверяем, не пора ли остановиться
+        if (!running) break;
+        
         if (clientSocket == INVALID_SOCKET_VAL) {
-            if (running) {
+            // Для неблокирующих сокетов это нормально - продолжаем цикл
 #ifdef _WIN32
-                std::cerr << "Accept failed: " << WSAGetLastError() << std::endl;
-#else
-                std::cerr << "Accept failed" << std::endl;
-#endif
+            int error = WSAGetLastError();
+            if (error != WSAEWOULDBLOCK) {
+                std::cerr << "Accept failed: " << error << std::endl;
             }
+#else
+            if (errno != EWOULDBLOCK && errno != EAGAIN) {
+                std::cerr << "Accept failed: " << strerror(errno) << std::endl;
+            }
+#endif
+            // Короткая пауза чтобы не грузить CPU
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
         
+        // Обрабатываем клиента в отдельном потоке или в этом же
         handleClient(clientSocket);
     }
 }
@@ -150,7 +199,7 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
     } else if (request.find("GET /groups") != std::string::npos) {
         response = getGroupsJson();
     } else {
-        response = createJsonResponse("{\"message\": \"Welcome to Student API! Available endpoints: /students, /teachers, /groups\"}");
+        response = createJsonResponse("{\"message\": \"Welcome to Student API (EduFlow)! Available endpoints: /students, /teachers, /groups\"}");
     }
     
 #ifdef _WIN32

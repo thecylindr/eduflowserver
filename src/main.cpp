@@ -115,12 +115,12 @@ public:
             
             // Статус системы
             std::cout << "📊 " << tr("system_status") << ":" << std::endl;
-            std::cout << "   🗄️  " << tr("database") << ": " << (dbService.testConnection() ? "✅ " + tr("connected") : "❌ " + tr("disconnected")) << std::endl;
-            std::cout << "   🌐 " << tr("api_server") << ": " << (apiRunning ? "✅ " + tr("running") : "❌ " + tr("stopped")) << std::endl;
+            std::cout << "🗄️  " << tr("database") << ": " << (dbService.testConnection() ? "✅ " + tr("connected") : "❌ " + tr("disconnected")) << std::endl;
+            std::cout << "🌐 " << tr("api_server") << ": " << (apiRunning ? "✅ " + tr("running") : "❌ " + tr("stopped")) << std::endl;
             
             // Получаем текущий язык из конфигурации
             DatabaseConfig config = dbService.getCurrentConfig();
-            std::cout << "   🌍 " << tr("language") << ": " << (config.language == "en" ? "English" : "Русский") << std::endl;
+            std::cout << "🌍 " << tr("language") << ": " << (config.language == "en" ? "English" : "Русский") << std::endl;
             
             std::cout << std::endl;
             
@@ -131,8 +131,8 @@ public:
             
             // Подготовка строк меню
             std::string menu1 = "1. ⚙️  " + tr("menu_db_setup");
-            std::string menu2 = "2. 🌐  " + tr("menu_api_manage");
-            std::string menu3 = "3. 👥  " + tr("menu_students");
+            std::string menu2 = "2. 🌐 " + tr("menu_api_manage");
+            std::string menu3 = "3. 👥 " + tr("menu_students");
             std::string menu4 = "4. 👨‍🏫 " + tr("menu_teachers");
             std::string menu5 = "5. 🎯 " + tr("menu_groups");
             std::string menu6 = "6. 📁 " + tr("menu_portfolios");
@@ -141,16 +141,16 @@ public:
             std::string menuExit = "Q. 🚪 " + tr("menu_exit");
             
             std::cout << "╔══════════════════════════════════════════════════════════╗" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu1, 54) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu2, 54) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu3, 54) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu4, 54) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu5, 54) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu6, 54) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu7, 54) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu8, 54) << "║" << std::endl;
-            std::cout << "║  " << std::string(54, ' ') << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menuExit, 54) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu1, 58) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu2, 58) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu3, 58) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu4, 58) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu5, 58) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu6, 58) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu7, 58) << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menu8, 58) << "║" << std::endl;
+            std::cout << "║  " << std::string(58, ' ') << "║" << std::endl;
+            std::cout << "║  " << formatMenuLine(menuExit, 58) << "║" << std::endl;
             std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
             
             std::cout << std::endl << "🎯 " << tr("choose_option") << ": ";
@@ -194,7 +194,7 @@ private:
         std::cout << "📄 " << tr("current_settings") << ":" << std::endl;
         std::cout << "   📍 " << tr("host") << ": " << currentConfig.host << std::endl;
         std::cout << "   🚪 " << tr("port") << ": " << currentConfig.port << std::endl;
-        std::cout << "   🗄️  " << tr("database_name") << ": " << currentConfig.database << std::endl;
+        std::cout << "   🗄️ " << tr("database_name") << ": " << currentConfig.database << std::endl;
         std::cout << "   👤 " << tr("username") << ": " << currentConfig.username << std::endl;
         std::cout << "   🔒 " << tr("password") << ": " << std::string(currentConfig.password.length(), '*') << std::endl;
         
@@ -256,7 +256,24 @@ private:
         clearScreen();
         drawHeader(tr("api_manage_title"));
         
-        if (!apiRunning) {
+        if (apiRunning == true) {
+            std::cout << "✅ " << tr("api_already_running") << std::endl;
+            std::cout << "📍 " << tr("available_at") << ": http://localhost:5000" << std::endl;
+            std::cout << std::endl;
+            
+            std::cout << "🛑 " << tr("stop_api_prompt") << " (y/N): ";
+            
+            std::string choice;
+            std::getline(std::cin, choice);
+            
+            if (choice == "y" || choice == "Y" || choice == "да" || choice == "д") {
+                apiService.stop();
+                apiRunning = false;
+                std::cout << "✅ " << tr("api_stop_success") << std::endl;
+            } else {
+                std::cout << "🔵 " << tr("api_keep_running") << std::endl;
+            }
+        } else {
             std::cout << "🔍 " << tr("checking_db") << "..." << std::endl;
             if (dbService.testConnection()) {
                 std::cout << "✅ " << tr("db_available") << std::endl;
@@ -277,10 +294,6 @@ private:
                 showError(tr("db_unavailable"));
                 std::cout << "💡 " << tr("setup_db_first") << std::endl;
             }
-        } else {
-            apiService.stop();
-            apiRunning = false;
-            std::cout << "✅ " << tr("api_stop_success") << std::endl;
         }
 
         waitForEnter();
