@@ -1,4 +1,4 @@
-// main.cpp - исправленная версия
+// main.cpp - версия с цветным оформлением
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -17,6 +17,25 @@
 #define CLEAR_SCREEN "clear"
 #endif
 
+// Цветовые коды для консоли
+namespace Colors {
+    const std::string RESET = "\033[0m";
+    const std::string RED = "\033[31m";
+    const std::string GREEN = "\033[32m";
+    const std::string YELLOW = "\033[33m";
+    const std::string BLUE = "\033[34m";
+    const std::string MAGENTA = "\033[35m";
+    const std::string CYAN = "\033[36m";
+    const std::string WHITE = "\033[37m";
+    const std::string BOLD = "\033[1m";
+    
+    // Фоновые цвета
+    const std::string BG_BLUE = "\033[44m";
+    const std::string BG_GREEN = "\033[42m";
+    const std::string BG_RED = "\033[41m";
+    const std::string BG_YELLOW = "\033[43m";
+}
+
 class Application {
 private:
     DatabaseService dbService;
@@ -34,7 +53,7 @@ public:
         if (it != locale.end()) {
             return it->second;
         }
-        return key; // Возвращаем ключ, если перевод не найден
+        return key;
     }
 
     // Очистка экрана
@@ -42,23 +61,31 @@ public:
         system(CLEAR_SCREEN);
     }
 
-    // Рисует красивый заголовок
+    // Красивый заголовок с цветом
     void drawHeader(const std::string& title) {
-        int width = 60;
-        int padding = (width - title.length() - 4) / 2;
-        
-        std::cout << "╔══════════════════════════════════════════════════════════╗" << std::endl;
-        std::cout << "║";
-        for (int i = 0; i < padding; i++) std::cout << " ";
-        std::cout << "🎓 " << title << " 🎓";
-        for (int i = 0; i < width - 4 - padding - title.length(); i++) std::cout << " ";
-        std::cout << "║" << std::endl;
-        std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl << std::endl;
+        std::cout << "┌────────────────────────────────────────────────────────────┐" << std::endl;
+        std::cout << "                🎓 " << title << " 🎓                  " << std::endl;
+        std::cout << "└────────────────────────────────────────────────────────────┘" << std::endl;
     }
 
-    // Рисует разделитель
-    void drawSeparator() {
-        std::cout << "──────────────────────────────────────────────────────────────" << std::endl;
+    // Информационное сообщение
+    void showInfo(const std::string& message) {
+        std::cout << Colors::CYAN << "💡 " << message << Colors::RESET << std::endl;
+    }
+
+    // Сообщение об успехе
+    void showSuccess(const std::string& message) {
+        std::cout << Colors::GREEN << "✅ " << message << Colors::RESET << std::endl;
+    }
+
+    // Сообщение об ошибке
+    void showError(const std::string& message) {
+        std::cout << Colors::RED << "❌ " << message << Colors::RESET << std::endl;
+    }
+
+    // Предупреждение
+    void showWarning(const std::string& message) {
+        std::cout << Colors::YELLOW << "⚠️  " << message << Colors::RESET << std::endl;
     }
 
     // Смена языка
@@ -66,10 +93,10 @@ public:
         clearScreen();
         drawHeader(tr("language_selection"));
         
-        std::cout << "🌍 " << tr("select_language") << ":" << std::endl;
-        std::cout << "  1. English" << std::endl;
-        std::cout << "  2. Русский" << std::endl;
-        std::cout << std::endl << "🎯 " << tr("choose_option") << ": ";
+        std::cout << Colors::MAGENTA << "🌍 " << tr("select_language") << ":" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "  1. English" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "  2. Русский" << Colors::RESET << std::endl;
+        std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
         
         std::string choice;
         std::cin >> choice;
@@ -86,25 +113,14 @@ public:
             return;
         }
         
-        // Загружаем новую локализацию
         locale = LocaleManager::loadLocale(newLanguage);
         
-        // Обновляем конфигурацию
         DatabaseConfig config = dbService.getCurrentConfig();
         config.language = newLanguage;
         configManager.saveConfig(config);
         
         showSuccess(tr("language_changed"));
         waitForEnter();
-    }
-
-    // Форматирование строки меню для выравнивания
-    std::string formatMenuLine(const std::string& text, int width) {
-        if (text.length() >= width) {
-            return text.substr(0, width - 3) + "...";
-        } else {
-            return text + std::string(width - text.length(), ' ');
-        }
     }
 
     // Отображает главное меню
@@ -114,46 +130,35 @@ public:
             drawHeader(tr("app_title"));
             
             // Статус системы
-            std::cout << "📊 " << tr("system_status") << ":" << std::endl;
-            std::cout << "🗄️  " << tr("database") << ": " << (dbService.testConnection() ? "✅ " + tr("connected") : "❌ " + tr("disconnected")) << std::endl;
-            std::cout << "🌐 " << tr("api_server") << ": " << (apiRunning ? "✅ " + tr("running") : "❌ " + tr("stopped")) << std::endl;
+            std::cout << Colors::MAGENTA << "📊 " << tr("system_status") << ":" << Colors::RESET << std::endl;
+            std::cout << "   🗄️  " << tr("database") << ": " 
+                      << (dbService.testConnection() ? Colors::GREEN + "✅ " + tr("connected") : Colors::RED + "❌ " + tr("disconnected")) 
+                      << Colors::RESET << std::endl;
+            std::cout << "   🌐 " << tr("api_server") << ": " 
+                      << (apiRunning ? Colors::GREEN + "✅ " + tr("running") : Colors::RED + "❌ " + tr("stopped")) 
+                      << Colors::RESET << std::endl;
             
-            // Получаем текущий язык из конфигурации
             DatabaseConfig config = dbService.getCurrentConfig();
-            std::cout << "🌍 " << tr("language") << ": " << (config.language == "en" ? "English" : "Русский") << std::endl;
+            std::cout << "   🌍 " << tr("language") << ": " 
+                      << (config.language == "en" ? Colors::CYAN + "English" : Colors::CYAN + "Русский") 
+                      << Colors::RESET << std::endl;
             
             std::cout << std::endl;
-            
-            drawSeparator();
-            
-            std::cout << "📋 " << tr("main_menu") << ":" << std::endl;
+            std::cout << Colors::MAGENTA << "📋 " << tr("main_menu") << ":" << Colors::RESET << std::endl;
             std::cout << std::endl;
             
-            // Подготовка строк меню
-            std::string menu1 = "1. ⚙️  " + tr("menu_db_setup");
-            std::string menu2 = "2. 🌐 " + tr("menu_api_manage");
-            std::string menu3 = "3. 👥 " + tr("menu_students");
-            std::string menu4 = "4. 👨‍🏫 " + tr("menu_teachers");
-            std::string menu5 = "5. 🎯 " + tr("menu_groups");
-            std::string menu6 = "6. 📁 " + tr("menu_portfolios");
-            std::string menu7 = "7. ℹ️  " + tr("menu_system_info");
-            std::string menu8 = "8. 🌍 " + tr("menu_change_language");
-            std::string menuExit = "Q. 🚪 " + tr("menu_exit");
+            // Цветное меню
+            std::cout << Colors::CYAN << "1. ⚙️  " << tr("menu_db_setup") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "2. 🌐 " << tr("menu_api_manage") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "3. 👥 " << tr("menu_students") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "4. 👨‍🏫 " << tr("menu_teachers") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "5. 🎯 " << tr("menu_groups") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "6. 📁 " << tr("menu_portfolios") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "7. ℹ️  " << tr("menu_system_info") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "8. 🌍 " << tr("menu_change_language") << Colors::RESET << std::endl;
+            std::cout << Colors::RED << "Q. 🚪 " << tr("menu_exit") << Colors::RESET << std::endl;
             
-            std::cout << "╔══════════════════════════════════════════════════════════╗" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu1, 58) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu2, 58) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu3, 58) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu4, 58) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu5, 58) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu6, 58) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu7, 58) << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menu8, 58) << "║" << std::endl;
-            std::cout << "║  " << std::string(58, ' ') << "║" << std::endl;
-            std::cout << "║  " << formatMenuLine(menuExit, 58) << "║" << std::endl;
-            std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
-            
-            std::cout << std::endl << "🎯 " << tr("choose_option") << ": ";
+            std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
             std::string choice;
             std::cin >> choice;
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -191,61 +196,61 @@ private:
 
         DatabaseConfig currentConfig = dbService.getCurrentConfig();
         
-        std::cout << "📄 " << tr("current_settings") << ":" << std::endl;
-        std::cout << "   📍 " << tr("host") << ": " << currentConfig.host << std::endl;
-        std::cout << "   🚪 " << tr("port") << ": " << currentConfig.port << std::endl;
-        std::cout << "   🗄️ " << tr("database_name") << ": " << currentConfig.database << std::endl;
-        std::cout << "   👤 " << tr("username") << ": " << currentConfig.username << std::endl;
-        std::cout << "   🔒 " << tr("password") << ": " << std::string(currentConfig.password.length(), '*') << std::endl;
+        std::cout << Colors::MAGENTA << "📄 " << tr("current_settings") << ":" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   📍 " << tr("host") << ": " << Colors::WHITE << currentConfig.host << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   🚪 " << tr("port") << ": " << Colors::WHITE << currentConfig.port << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   🗄️ " << tr("database_name") << ": " << Colors::WHITE << currentConfig.database << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   👤 " << tr("username") << ": " << Colors::WHITE << currentConfig.username << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   🔒 " << tr("password") << ": " << Colors::WHITE << std::string(currentConfig.password.length(), '*') << Colors::RESET << std::endl;
         
-        std::cout << std::endl << "🔄 " << tr("change_settings") << "? (y/N): ";
+        std::cout << std::endl << Colors::YELLOW << "🔄 " << tr("change_settings") << "? (y/N): " << Colors::RESET;
         std::string change;
         std::getline(std::cin, change);
         
         if (change == "y" || change == "Y" || change == "подтверждаю" || change == "да") {
-            std::cout << std::endl << "✏️  " << tr("enter_new_settings") << ":" << std::endl;
+            std::cout << std::endl << Colors::MAGENTA << "✏️  " << tr("enter_new_settings") << ":" << Colors::RESET << std::endl;
             
-            std::cout << "   " << tr("host") << " [" << currentConfig.host << "]: ";
+            std::cout << Colors::CYAN << "   " << tr("host") << " [" << currentConfig.host << "]: " << Colors::RESET;
             std::string host;
             std::getline(std::cin, host);
             if (!host.empty()) currentConfig.host = host;
 
-            std::cout << "   " << tr("port") << " [" << currentConfig.port << "]: ";
+            std::cout << Colors::CYAN << "   " << tr("port") << " [" << currentConfig.port << "]: " << Colors::RESET;
             std::string portStr;
             std::getline(std::cin, portStr);
             if (!portStr.empty()) currentConfig.port = std::stoi(portStr);
 
-            std::cout << "   " << tr("database_name") << " [" << currentConfig.database << "]: ";
+            std::cout << Colors::CYAN << "   " << tr("database_name") << " [" << currentConfig.database << "]: " << Colors::RESET;
             std::string db;
             std::getline(std::cin, db);
             if (!db.empty()) currentConfig.database = db;
 
-            std::cout << "   " << tr("username") << " [" << currentConfig.username << "]: ";
+            std::cout << Colors::CYAN << "   " << tr("username") << " [" << currentConfig.username << "]: " << Colors::RESET;
             std::string user;
             std::getline(std::cin, user);
             if (!user.empty()) currentConfig.username = user;
 
-            std::cout << "   " << tr("password") << ": ";
+            std::cout << Colors::CYAN << "   " << tr("password") << ": " << Colors::RESET;
             std::string pass;
             std::getline(std::cin, pass);
             if (!pass.empty()) currentConfig.password = pass;
 
             configManager.saveConfig(currentConfig);
-            std::cout << std::endl << "✅ " << tr("settings_saved") << std::endl;
+            showSuccess(tr("settings_saved"));
         }
 
-        std::cout << std::endl << "🔍 " << tr("testing_connection") << "..." << std::endl;
+        std::cout << std::endl << Colors::YELLOW << "🔍 " << tr("testing_connection") << "..." << Colors::RESET << std::endl;
         if (dbService.testConnection()) {
-            std::cout << "✅ " << tr("connection_success") << std::endl;
-            std::cout << "⚙️  " << tr("setting_up_tables") << "..." << std::endl;
+            showSuccess(tr("connection_success"));
+            std::cout << Colors::YELLOW << "⚙️  " << tr("setting_up_tables") << "..." << Colors::RESET << std::endl;
             if (dbService.setupDatabase()) {
-                std::cout << "✅ " << tr("db_setup_success") << std::endl;
+                showSuccess(tr("db_setup_success"));
             } else {
                 showError(tr("db_setup_error"));
             }
         } else {
             showError(tr("connection_error"));
-            std::cout << "💡 " << tr("check_settings") << std::endl;
+            showInfo(tr("check_settings"));
         }
 
         waitForEnter();
@@ -256,12 +261,12 @@ private:
         clearScreen();
         drawHeader(tr("api_manage_title"));
         
-        if (apiRunning == true) {
-            std::cout << "✅ " << tr("api_already_running") << std::endl;
-            std::cout << "📍 " << tr("available_at") << ": http://localhost:5000" << std::endl;
+        if (apiRunning) {
+            showSuccess(tr("api_already_running"));
+            std::cout << Colors::CYAN << "📍 " << tr("available_at") << ": " << Colors::WHITE << "http://localhost:5000" << Colors::RESET << std::endl;
             std::cout << std::endl;
             
-            std::cout << "🛑 " << tr("stop_api_prompt") << " (y/N): ";
+            std::cout << Colors::YELLOW << "🛑 " << tr("stop_api_prompt") << " (y/N): " << Colors::RESET;
             
             std::string choice;
             std::getline(std::cin, choice);
@@ -269,30 +274,31 @@ private:
             if (choice == "y" || choice == "Y" || choice == "да" || choice == "д") {
                 apiService.stop();
                 apiRunning = false;
-                std::cout << "✅ " << tr("api_stop_success") << std::endl;
+                showSuccess(tr("api_stop_success"));
             } else {
-                std::cout << "🔵 " << tr("api_keep_running") << std::endl;
+                showInfo(tr("api_keep_running"));
             }
         } else {
-            std::cout << "🔍 " << tr("checking_db") << "..." << std::endl;
+            std::cout << Colors::YELLOW << "🔍 " << tr("checking_db") << "..." << Colors::RESET << std::endl;
             if (dbService.testConnection()) {
-                std::cout << "✅ " << tr("db_available") << std::endl;
-                std::cout << "🚀 " << tr("starting_api") << "..." << std::endl;
+                showSuccess(tr("db_available"));
+                std::cout << Colors::YELLOW << "🚀 " << tr("starting_api") << "..." << Colors::RESET << std::endl;
                 
                 if (apiService.start()) {
                     apiRunning = true;
-                    std::cout << std::endl << "🎉 " << tr("api_start_success") << std::endl;
-                    std::cout << "📍 " << tr("available_at") << ": http://localhost:5000" << std::endl;
-                    std::cout << std::endl << "📡 " << tr("available_endpoints") << ":" << std::endl;
-                    std::cout << "   👥 GET /students   - " << tr("menu_students") << std::endl;
-                    std::cout << "   👨‍🏫 GET /teachers  - " << tr("menu_teachers") << std::endl;
-                    std::cout << "   🎯 GET /groups     - " << tr("menu_groups") << std::endl;
+                    std::cout << std::endl;
+                    showSuccess(tr("api_start_success"));
+                    std::cout << Colors::CYAN << "📍 " << tr("available_at") << ": " << Colors::WHITE << "http://localhost:5000" << Colors::RESET << std::endl;
+                    std::cout << std::endl << Colors::MAGENTA << "📡 " << tr("available_endpoints") << ":" << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   👥 GET /students   - " << Colors::WHITE << tr("menu_students") << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   👨‍🏫 GET /teachers  - " << Colors::WHITE << tr("menu_teachers") << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   🎯 GET /groups     - " << Colors::WHITE << tr("menu_groups") << Colors::RESET << std::endl;
                 } else {
                     showError(tr("api_start_error"));
                 }
             } else {
                 showError(tr("db_unavailable"));
-                std::cout << "💡 " << tr("setup_db_first") << std::endl;
+                showInfo(tr("setup_db_first"));
             }
         }
 
@@ -306,30 +312,25 @@ private:
 
         auto students = dbService.getStudents();
         
-        std::cout << "📊 " << tr("total_students") << ": " << students.size() << std::endl;
+        std::cout << Colors::MAGENTA << "📊 " << tr("total_students") << ": " << Colors::YELLOW << students.size() << Colors::RESET << std::endl;
         std::cout << std::endl;
         
         if (!students.empty()) {
-            std::cout << "┌──────────┬──────────────────┬──────────────────┬──────────────────┬──────────────┬──────────────────────────┬──────────┐" << std::endl;
-            std::cout << "│   " << tr("student_code") << "   │     " << tr("last_name") << "     │      " << tr("first_name") << "    │   " << tr("middle_name") << "   │    " << tr("phone") << "   │          " << tr("email") << "           │  " << tr("group") << "  │" << std::endl;
-            std::cout << "├──────────┼──────────────────┼──────────────────┼──────────────────┼──────────────┼──────────────────────────┼──────────┤" << std::endl;
-            
             for (const auto& student : students) {
-                std::cout << "│ " << std::setw(8) << student.studentCode << " │ "
-                          << std::setw(16) << std::left << (student.lastName.length() > 16 ? student.lastName.substr(0, 13) + "..." : student.lastName) << " │ "
-                          << std::setw(16) << std::left << (student.firstName.length() > 16 ? student.firstName.substr(0, 13) + "..." : student.firstName) << " │ "
-                          << std::setw(16) << std::left << (student.middleName.length() > 16 ? student.middleName.substr(0, 13) + "..." : student.middleName) << " │ "
-                          << std::setw(12) << std::left << student.phoneNumber << " │ "
-                          << std::setw(24) << std::left << (student.email.length() > 24 ? student.email.substr(0, 21) + "..." : student.email) << " │ "
-                          << std::setw(8) << student.groupId << " │" << std::endl;
+                std::cout << Colors::CYAN << "👤 " << tr("student") << " " << student.studentCode << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📍 " << tr("last_name") << ": " << Colors::WHITE << student.lastName << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📍 " << tr("first_name") << ": " << Colors::WHITE << student.firstName << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📍 " << tr("middle_name") << ": " << Colors::WHITE << student.middleName << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📞 " << tr("phone") << ": " << Colors::WHITE << student.phoneNumber << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   ✉️  " << tr("email") << ": " << Colors::WHITE << student.email << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   🎯 " << tr("group") << ": " << Colors::WHITE << student.groupId << Colors::RESET << std::endl;
+                std::cout << std::endl;
             }
-            
-            std::cout << "└──────────┴──────────────────┴──────────────────┴──────────────────┴──────────────┴──────────────────────────┴──────────┘" << std::endl;
         } else {
-            std::cout << "📭 " << tr("no_students") << std::endl;
+            showWarning(tr("no_students"));
         }
 
-        std::cout << std::endl << "💡 " << tr("use_api_hint") << std::endl;
+        showInfo(tr("use_api_hint"));
         waitForEnter();
     }
 
@@ -340,28 +341,23 @@ private:
 
         auto teachers = dbService.getTeachers();
         
-        std::cout << "📊 " << tr("total_teachers") << ": " << teachers.size() << std::endl;
+        std::cout << Colors::MAGENTA << "📊 " << tr("total_teachers") << ": " << Colors::YELLOW << teachers.size() << Colors::RESET << std::endl;
         std::cout << std::endl;
         
         if (!teachers.empty()) {
-            std::cout << "┌──────────┬──────────────────┬──────────────────┬──────────────────┬──────────┬──────────────────┬──────────────────────────┬──────────────┐" << std::endl;
-            std::cout << "│    " << tr("teacher_id") << "   │     " << tr("last_name") << "     │      " << tr("first_name") << "    │   " << tr("middle_name") << "   │   " << tr("experience") << "  │ " << tr("specialization") << "   │          " << tr("email") << "           │    " << tr("phone") << "   │" << std::endl;
-            std::cout << "├──────────┼──────────────────┼──────────────────┼──────────────────┼──────────┼──────────────────┼──────────────────────────┼──────────────┤" << std::endl;
-            
             for (const auto& teacher : teachers) {
-                std::cout << "│ " << std::setw(8) << teacher.teacherId << " │ "
-                          << std::setw(16) << std::left << teacher.lastName << " │ "
-                          << std::setw(16) << std::left << teacher.firstName << " │ "
-                          << std::setw(16) << std::left << teacher.middleName << " │ "
-                          << std::setw(8) << teacher.experience << " │ "
-                          << std::setw(16) << std::left << (teacher.specialization.length() > 16 ? teacher.specialization.substr(0, 13) + "..." : teacher.specialization) << " │ "
-                          << std::setw(24) << std::left << (teacher.email.length() > 24 ? teacher.email.substr(0, 21) + "..." : teacher.email) << " │ "
-                          << std::setw(12) << std::left << teacher.phoneNumber << " │" << std::endl;
+                std::cout << Colors::CYAN << "👨‍🏫 " << tr("teacher") << " " << teacher.teacherId << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📍 " << tr("last_name") << ": " << Colors::WHITE << teacher.lastName << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📍 " << tr("first_name") << ": " << Colors::WHITE << teacher.firstName << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📍 " << tr("middle_name") << ": " << Colors::WHITE << teacher.middleName << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   ⏱️  " << tr("experience") << ": " << Colors::WHITE << teacher.experience << Colors::RESET << " " << tr("years") << std::endl;
+                std::cout << Colors::CYAN << "   🎯 " << tr("specialization") << ": " << Colors::WHITE << teacher.specialization << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   ✉️  " << tr("email") << ": " << Colors::WHITE << teacher.email << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📞 " << tr("phone") << ": " << Colors::WHITE << teacher.phoneNumber << Colors::RESET << std::endl;
+                std::cout << std::endl;
             }
-            
-            std::cout << "└──────────┴──────────────────┴──────────────────┴──────────────────┴──────────┴──────────────────┴──────────────────────────┴──────────────┘" << std::endl;
         } else {
-            std::cout << "📭 " << tr("no_teachers") << std::endl;
+            showWarning(tr("no_teachers"));
         }
 
         waitForEnter();
@@ -374,24 +370,19 @@ private:
 
         auto groups = dbService.getGroups();
         
-        std::cout << "📊 " << tr("total_groups") << ": " << groups.size() << std::endl;
+        std::cout << Colors::MAGENTA << "📊 " << tr("total_groups") << ": " << Colors::YELLOW << groups.size() << Colors::RESET << std::endl;
         std::cout << std::endl;
         
         if (!groups.empty()) {
-            std::cout << "┌──────────┬──────────────────────┬──────────────────┬──────────────┐" << std::endl;
-            std::cout << "│    " << tr("group_name") << "   │       " << tr("group_name") << "      │ " << tr("student_count") << " │  " << tr("teacher_id") << "  │" << std::endl;
-            std::cout << "├──────────┼──────────────────────┼──────────────────┼──────────────┤" << std::endl;
-            
             for (const auto& group : groups) {
-                std::cout << "│ " << std::setw(8) << group.groupId << " │ "
-                          << std::setw(20) << std::left << group.name << " │ "
-                          << std::setw(16) << std::left << group.studentCount << " │ "
-                          << std::setw(12) << std::left << group.teacherId << " │" << std::endl;
+                std::cout << Colors::CYAN << "🎯 " << tr("group") << " " << group.groupId << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📝 " << tr("group_name") << ": " << Colors::WHITE << group.name << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   👥 " << tr("student_count") << ": " << Colors::WHITE << group.studentCount << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   👨‍🏫 " << tr("teacher_id") << ": " << Colors::WHITE << group.teacherId << Colors::RESET << std::endl;
+                std::cout << std::endl;
             }
-            
-            std::cout << "└──────────┴──────────────────────┴──────────────────┴──────────────┘" << std::endl;
         } else {
-            std::cout << "📭 " << tr("no_groups") << std::endl;
+            showWarning(tr("no_groups"));
         }
 
         waitForEnter();
@@ -404,26 +395,21 @@ private:
 
         auto portfolios = dbService.getPortfolios();
         
-        std::cout << "📊 " << tr("total_portfolios") << ": " << portfolios.size() << std::endl;
+        std::cout << Colors::MAGENTA << "📊 " << tr("total_portfolios") << ": " << Colors::YELLOW << portfolios.size() << Colors::RESET << std::endl;
         std::cout << std::endl;
         
         if (!portfolios.empty()) {
-            std::cout << "┌──────────────┬──────────────┬────────────────────┬────────────┬────────────────┬────────────────┐" << std::endl;
-            std::cout << "│   " << tr("portfolio_id") << "  │  " << tr("student_id") << " │   " << tr("measure_code") << "   │    " << tr("date") << "    │ " << tr("passport_series") << " │ " << tr("passport_number") << " │" << std::endl;
-            std::cout << "├──────────────┼──────────────┼────────────────────┼────────────┼────────────────┼────────────────┤" << std::endl;
-            
             for (const auto& portfolio : portfolios) {
-                std::cout << "│ " << std::setw(12) << portfolio.portfolioId << " │ "
-                          << std::setw(12) << std::left << portfolio.studentCode << " │ "
-                          << std::setw(18) << std::left << portfolio.measureCode << " │ "
-                          << std::setw(10) << std::left << portfolio.date << " │ "
-                          << std::setw(14) << std::left << portfolio.passportSeries << " │ "
-                          << std::setw(14) << std::left << portfolio.passportNumber << " │" << std::endl;
+                std::cout << Colors::CYAN << "📁 " << tr("portfolio") << " " << portfolio.portfolioId << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   👤 " << tr("student_id") << ": " << Colors::WHITE << portfolio.studentCode << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📊 " << tr("measure_code") << ": " << Colors::WHITE << portfolio.measureCode << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📅 " << tr("date") << ": " << Colors::WHITE << portfolio.date << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   🆔 " << tr("passport_series") << ": " << Colors::WHITE << portfolio.passportSeries << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   🔢 " << tr("passport_number") << ": " << Colors::WHITE << portfolio.passportNumber << Colors::RESET << std::endl;
+                std::cout << std::endl;
             }
-            
-            std::cout << "└──────────────┴──────────────┴────────────────────┴────────────┴────────────────┴────────────────┘" << std::endl;
         } else {
-            std::cout << "📭 " << tr("no_portfolios") << std::endl;
+            showWarning(tr("no_portfolios"));
         }
 
         waitForEnter();
@@ -434,27 +420,24 @@ private:
         clearScreen();
         drawHeader(tr("system_info_title"));
         
-        std::cout << "╔══════════════════════════════════════════════════════════╗" << std::endl;
-        std::cout << "║                 Student Management System                ║" << std::endl;
-        std::cout << "╠══════════════════════════════════════════════════════════╣" << std::endl;
-        std::cout << "║  🎯 " << tr("app_title") << ": 1.0                                  ║" << std::endl;
-        std::cout << "║  🖥️  Platform: Windows/Linux                            ║" << std::endl;
-        std::cout << "║  🗄️  Database: PostgreSQL 12+                           ║" << std::endl;
-        std::cout << "║  💻 Programming Language: C++17                         ║" << std::endl;
-        std::cout << "║  📚 Used Libraries:                                     ║" << std::endl;
-        std::cout << "║     • libpq (PostgreSQL client)                         ║" << std::endl;
-        std::cout << "║     • nlohmann/json (JSON processing)                   ║" << std::endl;
-        std::cout << "║                                                          ║" << std::endl;
-        std::cout << "║  🚀 Main Features:                                      ║" << std::endl;
-        std::cout << "║     • " << tr("menu_students") << "                   ║" << std::endl;
-        std::cout << "║     • " << tr("menu_teachers") << "                ║" << std::endl;
-        std::cout << "║     • " << tr("menu_groups") << "                      ║" << std::endl;
-        std::cout << "║     • " << tr("menu_portfolios") << "                   ║" << std::endl;
-        std::cout << "║     • REST API for integration                          ║" << std::endl;
-        std::cout << "║     • Cross-platform                                    ║" << std::endl;
-        std::cout << "║                                                          ║" << std::endl;
-        std::cout << "║  📞 Developer: Dmitry Stolbov                           ║" << std::endl;
-        std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
+        std::cout << Colors::CYAN << "🎯 " << tr("app_title") << ": " << Colors::WHITE << "1.0" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "🖥️  Platform: " << Colors::WHITE << "Windows/Linux" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "🗄️  Database: " << Colors::WHITE << "PostgreSQL 12+" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "💻 Programming Language: " << Colors::WHITE << "C++17" << Colors::RESET << std::endl;
+        
+        std::cout << std::endl << Colors::MAGENTA << "📚 Used Libraries:" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • libpq " << Colors::WHITE << "(PostgreSQL client)" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • nlohmann/json " << Colors::WHITE << "(JSON processing)" << Colors::RESET << std::endl;
+        
+        std::cout << std::endl << Colors::MAGENTA << "🚀 Main Features:" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • " << Colors::WHITE << tr("menu_students") << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • " << Colors::WHITE << tr("menu_teachers") << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • " << Colors::WHITE << tr("menu_groups") << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • " << Colors::WHITE << tr("menu_portfolios") << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • " << Colors::WHITE << "REST API for integration" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • " << Colors::WHITE << "Cross-platform" << Colors::RESET << std::endl;
+        
+        std::cout << std::endl << Colors::MAGENTA << "👨‍💻 Developer: " << Colors::WHITE << "Dmitry Stolbov" << Colors::RESET << std::endl;
 
         waitForEnter();
     }
@@ -465,28 +448,20 @@ private:
         drawHeader(tr("exit_title"));
         
         if (apiRunning) {
-            std::cout << "🛑 " << tr("stopping_api") << "..." << std::endl;
+            std::cout << Colors::YELLOW << "🛑 " << tr("stopping_api") << "..." << Colors::RESET << std::endl;
             apiService.stop();
             apiRunning = false;
-            std::cout << "✅ " << tr("api_stop_success") << std::endl;
+            showSuccess(tr("api_stop_success"));
         }
         
-        std::cout << std::endl << "👋 " << tr("thank_you") << std::endl;
+        std::cout << std::endl << Colors::GREEN << "👋 " << tr("thank_you") << Colors::RESET << std::endl;
         std::cout << std::endl;
     }
 
     // Вспомогательные методы
     void waitForEnter() {
-        std::cout << std::endl << "↵ " << tr("press_enter") << std::endl;
+        std::cout << std::endl << Colors::YELLOW << "↵ " << tr("press_enter") << Colors::RESET << std::endl;
         std::cin.get();
-    }
-
-    void showError(const std::string& message) {
-        std::cout << "❌ " << tr("error") << ": " << message << std::endl;
-    }
-
-    void showSuccess(const std::string& message) {
-        std::cout << "✅ " << message << std::endl;
     }
 };
 
@@ -499,9 +474,9 @@ int main() {
 
     try {
         // Проверка файлов локализации
-        std::cout << "🌍 Checking localization files..." << std::endl;
+        std::cout << Colors::YELLOW << "🌍 Checking localization files..." << Colors::RESET << std::endl;
         if (!LocaleManager::checkLocales()) {
-            std::cout << "❌ Localization files missing. Please make sure lang/locale_en.json and lang/locale_ru.json exist." << std::endl;
+            std::cout << Colors::RED << "❌ Localization files missing. Please make sure lang/locale_en.json and lang/locale_ru.json exist." << Colors::RESET << std::endl;
             return 1;
         }
 
@@ -513,19 +488,18 @@ int main() {
         // Загружаем локализацию на основе конфигурации
         std::map<std::string, std::string> currentLocale = LocaleManager::loadLocale(config.language);
         
-        // Если не удалось загрузить локализацию, выходим
         if (currentLocale.empty()) {
-            std::cerr << "❌ Failed to load localization for language: " << config.language << std::endl;
+            std::cerr << Colors::RED << "❌ Failed to load localization for language: " << config.language << Colors::RESET << std::endl;
             return 1;
         }
 
-        std::cout << std::endl << "🚀 Starting application..." << std::endl;
+        std::cout << std::endl << Colors::GREEN << "🚀 Starting application..." << Colors::RESET << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         Application app(currentLocale);
         app.showMainMenu();
     } catch (const std::exception& e) {
-        std::cerr << "💥 Critical error: " << e.what() << std::endl;
+        std::cerr << Colors::RED << "💥 Critical error: " << e.what() << Colors::RESET << std::endl;
         std::cout << "Press Enter to exit..." << std::endl;
         std::cin.get();
         return 1;
