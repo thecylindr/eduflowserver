@@ -93,18 +93,23 @@ bool DatabaseService::setupDatabase() {
         "CREATE TABLE IF NOT EXISTS student_portfolio ("
         "portfolio_id SERIAL PRIMARY KEY,"
         "student_code INTEGER REFERENCES students(student_code),"
-        "measure_code VARCHAR(100) NOT NULL UNIQUE,"
+        "measure_code INTEGER NOT NULL UNIQUE,"
         "date DATE NOT NULL,"
         "passport_series VARCHAR(10) NOT NULL,"
         "passport_number VARCHAR(10) NOT NULL)",
 
         "CREATE TABLE IF NOT EXISTS event ("
         "event_id INTEGER REFERENCES student_portfolio(measure_code),"
+        "event_category VARCHAR(48) NOT NULL UNIQUE,"
         "event_type VARCHAR(50) NOT NULL,"
         "start_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
         "end_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
-        "location CHARACTER VARYING(48),"
+        "location VARCHAR(48),"
         "lore TEXT)",
+
+        "CREATE TABLE IF NOT EXISTS event_category ("
+        "event_type VARCHAR(48) REFERENCES event(event_category),"
+        "category VARCHAR(48))",
 
         "CREATE TABLE IF NOT EXISTS users ("
         "user_id SERIAL PRIMARY KEY,"
