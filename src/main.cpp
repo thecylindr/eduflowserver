@@ -5,17 +5,15 @@
 #include <limits>
 #include <iomanip>
 #include <thread>
-#include "DatabaseService.h"
-#include "ApiService.h"
-#include "ConfigManager.h"
+#include "database/DatabaseService.h"
+#include "api/ApiService.h"
+#include "configs/ConfigManager.h"
 #include "LocaleManager.h"
 
 #include <vector>
 #include <map>
 #include <chrono>
 #include <sstream>
-#include "DatabaseService.h"
-#include "ApiService.h"
 #include "Models.h"
 
 #ifdef _WIN32
@@ -156,10 +154,10 @@ public:
             std::cout << std::endl;
             
             // Цветное меню
-            std::cout << Colors::CYAN << "1. ⚙️  " << tr("menu_db_setup") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "1. ⚙️ " << tr("menu_db_setup") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "2. 🌐 " << tr("menu_api_manage") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "3. 👥 " << tr("menu_students") << Colors::RESET << std::endl;
-            std::cout << Colors::CYAN << "4. 👨‍🏫 " << tr("menu_teachers") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "4. 🏫 " << tr("menu_teachers") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "5. 🎯 " << tr("menu_groups") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "6. 📁 " << tr("menu_portfolios") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "7. ℹ️  " << tr("menu_system_info") << Colors::RESET << std::endl;
