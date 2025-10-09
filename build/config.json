@@ -1,0 +1,8 @@
+{
+    "database": "student_db",
+    "host": "localhost",
+    "language": "en",
+    "password": "password",
+    "port": 5432,
+    "username": "postgres"
+}
