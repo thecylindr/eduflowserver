@@ -20,13 +20,128 @@ endif()
 # Определение платформы
 if(WIN32)
     add_definitions(-D_WINDOWS)
-    set(PLATFORM_LIBS ws2_32 wsock32)
+    set(PLATFORM_LIBS ws2_32 wsock32 crypt32)
     message(STATUS "Building for Windows")
 else()
     add_definitions(-D_LINUX)
     find_package(Threads REQUIRED)
     set(PLATFORM_LIBS Threads::Threads)
     message(STATUS "Building for Linux")
+endif()
+
+# ПОИСК OPENSSL
+message(STATUS "Looking for OpenSSL...")
+if(WIN32)
+    # Windows: быстрый поиск в стандартных путях
+    set(OPENSSL_PATHS
+        "C:/Program Files/OpenSSL"
+        "C:/OpenSSL"
+        "C:/OpenSSL-Win64"
+        "C:/msys64/mingw64"
+    )
+    
+    # Ищем OpenSSL 1.1.x (более стабильный)
+    find_path(OPENSSL_INCLUDE_DIR
+        NAMES openssl/evp.h
+        PATHS ${OPENSSL_PATHS}
+        PATH_SUFFIXES include
+    )
+    
+    find_library(OPENSSL_CRYPTO_LIBRARY
+        NAMES libcrypto crypto libcrypto-1_1-x64 libcrypto-1_1
+        PATHS ${OPENSSL_PATHS}
+        PATH_SUFFIXES lib lib64
+    )
+    
+    find_library(OPENSSL_SSL_LIBRARY
+        NAMES libssl ssl libssl-1_1-x64 libssl-1_1
+        PATHS ${OPENSSL_PATHS}
+        PATH_SUFFIXES lib lib64
+    )
+    
+    # Если не нашли 1.1.x, ищем 3.x
+    if(NOT OPENSSL_CRYPTO_LIBRARY)
+        find_library(OPENSSL_CRYPTO_LIBRARY
+            NAMES libcrypto-3-x64 libcrypto
+            PATHS ${OPENSSL_PATHS}
+            PATH_SUFFIXES lib lib64
+        )
+    endif()
+    
+    if(NOT OPENSSL_SSL_LIBRARY)
+        find_library(OPENSSL_SSL_LIBRARY
+            NAMES libssl-3-x64 libssl
+            PATHS ${OPENSSL_PATHS}
+            PATH_SUFFIXES lib lib64
+        )
+    endif()
+    
+else()
+    # Linux: используем pkg-config
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(OPENSSL QUIET openssl)
+        if(OPENSSL_FOUND)
+            set(OPENSSL_INCLUDE_DIR ${OPENSSL_INCLUDE_DIRS})
+            set(OPENSSL_CRYPTO_LIBRARY ${OPENSSL_LIBRARIES})
+            set(OPENSSL_SSL_LIBRARY ${OPENSSL_LIBRARIES})
+        endif()
+    endif()
+    
+    # Резервный поиск для Linux
+    if(NOT OPENSSL_INCLUDE_DIR)
+        find_path(OPENSSL_INCLUDE_DIR
+            NAMES openssl/evp.h
+            PATHS
+                /usr/include
+                /usr/local/include
+                /opt/openssl/include
+        )
+    endif()
+    
+    if(NOT OPENSSL_CRYPTO_LIBRARY)
+        find_library(OPENSSL_CRYPTO_LIBRARY
+            NAMES crypto libcrypto
+            PATHS
+                /usr/lib
+                /usr/lib64
+                /usr/local/lib
+                /opt/openssl/lib
+        )
+    endif()
+    
+    if(NOT OPENSSL_SSL_LIBRARY)
+        find_library(OPENSSL_SSL_LIBRARY
+            NAMES ssl libssl
+            PATHS
+                /usr/lib
+                /usr/lib64
+                /usr/local/lib
+                /opt/openssl/lib
+        )
+    endif()
+endif()
+
+# Проверка OpenSSL
+if(OPENSSL_INCLUDE_DIR AND OPENSSL_CRYPTO_LIBRARY AND OPENSSL_SSL_LIBRARY)
+    set(OPENSSL_FOUND TRUE)
+    message(STATUS "OpenSSL found:")
+    message(STATUS "  Include: ${OPENSSL_INCLUDE_DIR}")
+    message(STATUS "  Crypto: ${OPENSSL_CRYPTO_LIBRARY}")
+    message(STATUS "  SSL: ${OPENSSL_SSL_LIBRARY}")
+    
+    # Определяем версию OpenSSL по имени библиотеки
+    if(OPENSSL_CRYPTO_LIBRARY MATCHES "1_1")
+        set(OPENSSL_VERSION "1.1.x")
+    elseif(OPENSSL_CRYPTO_LIBRARY MATCHES "3")
+        set(OPENSSL_VERSION "3.x")
+    else()
+        set(OPENSSL_VERSION "unknown")
+    endif()
+    message(STATUS "  Version: ${OPENSSL_VERSION}")
+else()
+    set(OPENSSL_FOUND FALSE)
+    message(WARNING "OpenSSL not found - hash functions will not work!")
 endif()
 
 # БЫСТРЫЙ ПОИСК POSTGRESQL
@@ -194,10 +309,23 @@ target_include_directories(StudentManagementSystem PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(StudentManagementSystem 
-    ${POSTGRESQL_LIBRARY}
-    ${PLATFORM_LIBS}
-)
+# Добавляем OpenSSL если найден
+if(OPENSSL_FOUND)
+    target_include_directories(StudentManagementSystem PRIVATE ${OPENSSL_INCLUDE_DIR})
+    target_link_libraries(StudentManagementSystem 
+        ${POSTGRESQL_LIBRARY}
+        ${PLATFORM_LIBS}
+        ${OPENSSL_CRYPTO_LIBRARY}
+        ${OPENSSL_SSL_LIBRARY}
+    )
+    message(STATUS "Linking with OpenSSL libraries")
+else()
+    target_link_libraries(StudentManagementSystem 
+        ${POSTGRESQL_LIBRARY}
+        ${PLATFORM_LIBS}
+    )
+    message(WARNING "Building without OpenSSL - hash functions will not work!")
+endif()
 
 # Копирование конфига
 configure_file("${CMAKE_SOURCE_DIR}/config.json" "${CMAKE_BINARY_DIR}/config.json" COPYONLY)
@@ -208,7 +336,7 @@ if(WIN32)
     
     # Создаем цель для копирования DLL
     add_custom_target(copy_dlls ALL
-        COMMENT "Copying PostgreSQL DLL files..."
+        COMMENT "Copying required DLL files..."
         DEPENDS StudentManagementSystem
     )
     
@@ -227,14 +355,38 @@ if(WIN32)
         endif()
     endfunction()
 
-    # Копируем основные DLL
+    # Копируем основные DLL PostgreSQL
     copy_dll_if_exists("libpq.dll")
     copy_dll_if_exists("libintl-8.dll")
     copy_dll_if_exists("libintl-9.dll")
-    copy_dll_if_exists("libcrypto-3-x64.dll")
-    copy_dll_if_exists("libssl-3-x64.dll")
-    copy_dll_if_exists("libcrypto-1_1-x64.dll")
-    copy_dll_if_exists("libssl-1_1-x64.dll")
+    
+    # Копируем OpenSSL DLL в зависимости от версии
+    if(OPENSSL_FOUND)
+        # Определяем директорию с OpenSSL DLL
+        get_filename_component(OPENSSL_LIB_DIR "${OPENSSL_CRYPTO_LIBRARY}" DIRECTORY)
+        get_filename_component(OPENSSL_BIN_DIR "${OPENSSL_LIB_DIR}/../bin" ABSOLUTE)
+        
+        if(EXISTS "${OPENSSL_BIN_DIR}")
+            message(STATUS "OpenSSL bin directory: ${OPENSSL_BIN_DIR}")
+            
+            # Копируем OpenSSL DLL в зависимости от версии
+            if(OPENSSL_VERSION STREQUAL "1.1.x")
+                copy_dll_if_exists("libcrypto-1_1-x64.dll")
+                copy_dll_if_exists("libssl-1_1-x64.dll")
+            elseif(OPENSSL_VERSION STREQUAL "3.x")
+                copy_dll_if_exists("libcrypto-3-x64.dll")
+                copy_dll_if_exists("libssl-3-x64.dll")
+            else()
+                # Пробуем оба варианта
+                copy_dll_if_exists("libcrypto-1_1-x64.dll")
+                copy_dll_if_exists("libssl-1_1-x64.dll")
+                copy_dll_if_exists("libcrypto-3-x64.dll")
+                copy_dll_if_exists("libssl-3-x64.dll")
+            endif()
+        else()
+            message(WARNING "OpenSSL bin directory not found at: ${OPENSSL_BIN_DIR}")
+        endif()
+    endif()
     
     # Проверка результата
     add_custom_command(TARGET copy_dlls POST_BUILD
@@ -275,6 +427,12 @@ if(WIN32)
     # Копируем все DLL из PostgreSQL
     copy_all_dlls_from_dir("${POSTGRESQL_BIN_DIR}" "lib*.dll")
     
+    # Копируем все DLL из OpenSSL если найдены
+    if(OPENSSL_FOUND AND EXISTS "${OPENSSL_BIN_DIR}")
+        copy_all_dlls_from_dir("${OPENSSL_BIN_DIR}" "libcrypto*.dll")
+        copy_all_dlls_from_dir("${OPENSSL_BIN_DIR}" "libssl*.dll")
+    endif()
+    
     # Копируем все DLL из MinGW (если используется MinGW)
     if(MINGW)
         get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
@@ -294,6 +452,11 @@ message(STATUS "=== Configuration Summary ===")
 message(STATUS "Project: ${PROJECT_NAME}")
 message(STATUS "Source files: ${SOURCES}")
 message(STATUS "PostgreSQL: ${POSTGRESQL_INCLUDE_DIR}")
+if(OPENSSL_FOUND)
+    message(STATUS "OpenSSL: Found (${OPENSSL_VERSION})")
+else()
+    message(STATUS "OpenSSL: NOT FOUND - hash functions disabled")
+endif()
 if(WIN32)
     message(STATUS "Output: ${CMAKE_BINARY_DIR}/StudentManagementSystem.exe")
 else()

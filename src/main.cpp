@@ -10,6 +10,14 @@
 #include "ConfigManager.h"
 #include "LocaleManager.h"
 
+#include <vector>
+#include <map>
+#include <chrono>
+#include <sstream>
+#include "DatabaseService.h"
+#include "ApiService.h"
+#include "Models.h"
+
 #ifdef _WIN32
 #include <windows.h>
 #define CLEAR_SCREEN "cls"

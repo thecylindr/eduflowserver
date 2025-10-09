@@ -142,6 +142,119 @@ void DatabaseService::executeSQL(const std::string& sql) {
     PQclear(res);
 }
 
+// User management methods
+bool DatabaseService::addUser(const User& user) {
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "INSERT INTO users (email, phone_number, password_hash, last_name, first_name, middle_name) VALUES ($1, $2, $3, $4, $5, $6)";
+    const char* params[6] = {
+        user.email.c_str(),
+        user.phoneNumber.c_str(),
+        user.passwordHash.c_str(),
+        user.lastName.c_str(),
+        user.firstName.c_str(),
+        user.middleName.c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+bool DatabaseService::updateUser(const User& user) {
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед обновлением
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "UPDATE users SET email = $1, phone_number = $2, password_hash = $3, last_name = $4, first_name = $5, middle_name = $6 WHERE user_id = $7";
+    const char* params[7] = {
+        user.email.c_str(),
+        user.phoneNumber.c_str(),
+        user.passwordHash.c_str(),
+        user.lastName.c_str(),
+        user.firstName.c_str(),
+        user.middleName.c_str(),
+        std::to_string(user.userId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+User DatabaseService::getUserByEmail(const std::string& email) {
+    User user;
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return user;
+    }
+    
+    std::string sql = "SELECT user_id, email, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE email = $1";
+    const char* params[1] = { email.c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return user;
+    }
+    
+    user.userId = std::stoi(PQgetvalue(res, 0, 0));
+    user.email = PQgetvalue(res, 0, 1);
+    user.phoneNumber = PQgetvalue(res, 0, 2);
+    user.passwordHash = PQgetvalue(res, 0, 3);
+    user.lastName = PQgetvalue(res, 0, 4);
+    user.firstName = PQgetvalue(res, 0, 5);
+    user.middleName = PQgetvalue(res, 0, 6);
+    
+    PQclear(res);
+    return user;
+}
+
+User DatabaseService::getUserById(int userId) {
+    User user;
+    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return user;
+    }
+    
+    std::string sql = "SELECT user_id, email, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE user_id = $1";
+    const char* params[1] = { std::to_string(userId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return user;
+    }
+    
+    user.userId = std::stoi(PQgetvalue(res, 0, 0));
+    user.email = PQgetvalue(res, 0, 1);
+    user.phoneNumber = PQgetvalue(res, 0, 2);
+    user.passwordHash = PQgetvalue(res, 0, 3);
+    user.lastName = PQgetvalue(res, 0, 4);
+    user.firstName = PQgetvalue(res, 0, 5);
+    user.middleName = PQgetvalue(res, 0, 6);
+    
+    PQclear(res);
+    return user;
+}
+
+// Existing methods remain the same...
 std::vector<Teacher> DatabaseService::getTeachers() {
     std::vector<Teacher> teachers;
     

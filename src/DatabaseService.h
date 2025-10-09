@@ -26,6 +26,12 @@ public:
     bool addGroup(const StudentGroup& group);
     bool addPortfolio(const StudentPortfolio& portfolio);
     
+    // User management
+    bool addUser(const User& user);
+    bool updateUser(const User& user);
+    User getUserByEmail(const std::string& email);
+    User getUserById(int userId);
+    
     std::vector<Student> getStudents();
     std::vector<Teacher> getTeachers();
     std::vector<StudentGroup> getGroups();
