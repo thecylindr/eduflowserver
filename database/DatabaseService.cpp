@@ -510,3 +510,292 @@ std::vector<Student> DatabaseService::getStudents() {
     PQclear(res);
     return students;
 }
+
+bool DatabaseService::updateTeacher(const Teacher& teacher) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "UPDATE teachers SET last_name = $1, first_name = $2, middle_name = $3, experience = $4, specialization = $5, email = $6, phone_number = $7 WHERE teacher_id = $8";
+    const char* params[8] = {
+        teacher.lastName.c_str(),
+        teacher.firstName.c_str(),
+        teacher.middleName.c_str(),
+        std::to_string(teacher.experience).c_str(),
+        teacher.specialization.c_str(),
+        teacher.email.c_str(),
+        teacher.phoneNumber.c_str(),
+        std::to_string(teacher.teacherId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+bool DatabaseService::deleteTeacher(int teacherId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM teachers WHERE teacher_id = $1";
+    const char* params[1] = { std::to_string(teacherId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+bool DatabaseService::updateStudent(const Student& student) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "UPDATE students SET last_name = $1, first_name = $2, middle_name = $3, phone_number = $4, email = $5, group_id = $6 WHERE student_code = $7";
+    const char* params[7] = {
+        student.lastName.c_str(),
+        student.firstName.c_str(),
+        student.middleName.c_str(),
+        student.phoneNumber.c_str(),
+        student.email.c_str(),
+        std::to_string(student.groupId).c_str(),
+        std::to_string(student.studentCode).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+bool DatabaseService::deleteStudent(int studentCode) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM students WHERE student_code = $1";
+    const char* params[1] = { std::to_string(studentCode).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+Teacher DatabaseService::getTeacherById(int teacherId) {
+    Teacher teacher;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return teacher;
+    }
+    
+    std::string sql = "SELECT teacher_id, last_name, first_name, middle_name, experience, specialization, email, phone_number FROM teachers WHERE teacher_id = $1";
+    const char* params[1] = { std::to_string(teacherId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return teacher;
+    }
+    
+    teacher.teacherId = std::stoi(PQgetvalue(res, 0, 0));
+    teacher.lastName = PQgetvalue(res, 0, 1);
+    teacher.firstName = PQgetvalue(res, 0, 2);
+    teacher.middleName = PQgetvalue(res, 0, 3);
+    teacher.experience = std::stoi(PQgetvalue(res, 0, 4));
+    teacher.specialization = PQgetvalue(res, 0, 5);
+    teacher.email = PQgetvalue(res, 0, 6);
+    teacher.phoneNumber = PQgetvalue(res, 0, 7);
+    
+    PQclear(res);
+    return teacher;
+}
+
+Student DatabaseService::getStudentById(int studentId) {
+    Student student;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return student;
+    }
+    
+    std::string sql = "SELECT student_code, last_name, first_name, middle_name, phone_number, email, group_id FROM students WHERE student_code = $1";
+    const char* params[1] = { std::to_string(studentId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return student;
+    }
+    
+    student.studentCode = std::stoi(PQgetvalue(res, 0, 0));
+    student.lastName = PQgetvalue(res, 0, 1);
+    student.firstName = PQgetvalue(res, 0, 2);
+    student.middleName = PQgetvalue(res, 0, 3);
+    student.phoneNumber = PQgetvalue(res, 0, 4);
+    student.email = PQgetvalue(res, 0, 5);
+    student.groupId = std::stoi(PQgetvalue(res, 0, 6));
+    
+    PQclear(res);
+    return student;
+}
+
+StudentGroup DatabaseService::getGroupById(int groupId) {
+    StudentGroup group;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return group;
+    }
+    
+    std::string sql = "SELECT group_id, name, student_count, teacher_id FROM student_groups WHERE group_id = $1";
+    const char* params[1] = { std::to_string(groupId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return group;
+    }
+    
+    group.groupId = std::stoi(PQgetvalue(res, 0, 0));
+    group.name = PQgetvalue(res, 0, 1);
+    group.studentCount = std::stoi(PQgetvalue(res, 0, 2));
+    group.teacherId = std::stoi(PQgetvalue(res, 0, 3));
+    
+    PQclear(res);
+    return group;
+}
+
+bool DatabaseService::updateGroup(const StudentGroup& group) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "UPDATE student_groups SET name = $1, student_count = $2, teacher_id = $3 WHERE group_id = $4";
+    const char* params[4] = {
+        group.name.c_str(),
+        std::to_string(group.studentCount).c_str(),
+        std::to_string(group.teacherId).c_str(),
+        std::to_string(group.groupId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 4, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+bool DatabaseService::deleteGroup(int groupId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM student_groups WHERE group_id = $1";
+    const char* params[1] = { std::to_string(groupId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+std::vector<Event> DatabaseService::getEvents() {
+    std::vector<Event> events;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return events;
+    }
+    
+    PGresult* res = PQexec(connection, "SELECT event_id, event_category, event_type, start_date, end_date, location, lore FROM event");
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return events;
+    }
+    
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        Event event;
+        event.eventId = std::stoi(PQgetvalue(res, i, 0));
+        event.eventCategory = PQgetvalue(res, i, 1);
+        event.eventType = PQgetvalue(res, i, 2);
+        event.startDate = PQgetvalue(res, i, 3);
+        event.endDate = PQgetvalue(res, i, 4);
+        event.location = PQgetvalue(res, i, 5);
+        event.lore = PQgetvalue(res, i, 6);
+        
+        events.push_back(event);
+    }
+    
+    PQclear(res);
+    return events;
+}
+
+bool DatabaseService::addEvent(const Event& event) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "INSERT INTO event (event_id, event_category, event_type, start_date, end_date, location, lore) VALUES ($1, $2, $3, $4, $5, $6, $7)";
+    const char* params[7] = {
+        std::to_string(event.eventId).c_str(),
+        event.eventCategory.c_str(),
+        event.eventType.c_str(),
+        event.startDate.c_str(),
+        event.endDate.c_str(),
+        event.location.c_str(),
+        event.lore.c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+std::vector<std::string> DatabaseService::getSpecializations() {
+    std::vector<std::string> specializations;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return specializations;
+    }
+    
+    PGresult* res = PQexec(connection, "SELECT name FROM specialization_list");
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return specializations;
+    }
+    
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        specializations.push_back(PQgetvalue(res, i, 0));
+    }
+    
+    PQclear(res);
+    return specializations;
+}

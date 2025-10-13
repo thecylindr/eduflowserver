@@ -54,19 +54,16 @@ if(WIN32)
     )
     
 else()
-    # Linux: используем pkg-config
-    find_package(PkgConfig QUIET)
-    if(PKG_CONFIG_FOUND)
-        pkg_check_modules(OPENSSL QUIET openssl)
-        if(OPENSSL_FOUND)
-            set(OPENSSL_INCLUDE_DIR ${OPENSSL_INCLUDE_DIRS})
-            set(OPENSSL_CRYPTO_LIBRARY ${OPENSSL_LIBRARIES})
-            set(OPENSSL_SSL_LIBRARY ${OPENSSL_LIBRARIES})
-        endif()
-    endif()
-    
-    # Резервный поиск для Linux
-    if(NOT OPENSSL_INCLUDE_DIR)
+    # Linux: используем стандартный поиск
+    find_package(OpenSSL REQUIRED)
+    if(OpenSSL_FOUND)
+        set(OPENSSL_INCLUDE_DIR ${OPENSSL_INCLUDE_DIR})
+        set(OPENSSL_CRYPTO_LIBRARY ${OPENSSL_CRYPTO_LIBRARIES})
+        set(OPENSSL_SSL_LIBRARY ${OPENSSL_SSL_LIBRARIES})
+        set(OPENSSL_FOUND TRUE)
+        message(STATUS "OpenSSL found via find_package")
+    else()
+        # Резервный поиск для Linux
         find_path(OPENSSL_INCLUDE_DIR
             NAMES openssl/evp.h
             PATHS
@@ -74,9 +71,7 @@ else()
                 /usr/local/include
                 /opt/openssl/include
         )
-    endif()
-    
-    if(NOT OPENSSL_CRYPTO_LIBRARY)
+        
         find_library(OPENSSL_CRYPTO_LIBRARY
             NAMES crypto libcrypto
             PATHS
@@ -85,9 +80,7 @@ else()
                 /usr/local/lib
                 /opt/openssl/lib
         )
-    endif()
-    
-    if(NOT OPENSSL_SSL_LIBRARY)
+        
         find_library(OPENSSL_SSL_LIBRARY
             NAMES ssl libssl
             PATHS
@@ -106,10 +99,16 @@ if(OPENSSL_INCLUDE_DIR AND OPENSSL_CRYPTO_LIBRARY AND OPENSSL_SSL_LIBRARY)
     message(STATUS "  Include: ${OPENSSL_INCLUDE_DIR}")
     message(STATUS "  Crypto: ${OPENSSL_CRYPTO_LIBRARY}")
     message(STATUS "  SSL: ${OPENSSL_SSL_LIBRARY}")
-    set(OPENSSL_VERSION "3.x")
+    
+    # Получаем версию OpenSSL
+    if(OpenSSL_VERSION)
+        set(OPENSSL_VERSION "${OpenSSL_VERSION}")
+    else()
+        set(OPENSSL_VERSION "Unknown")
+    endif()
     message(STATUS "  Version: ${OPENSSL_VERSION}")
     
-    # Определяем путь к bin для DLL
+    # Определяем путь к bin для DLL (только для Windows)
     if(WIN32)
         get_filename_component(OPENSSL_LIB_DIR "${OPENSSL_SSL_LIBRARY}" DIRECTORY)
         set(OPENSSL_BIN_DIR "${OPENSSL_LIB_DIR}/../bin")
@@ -139,13 +138,14 @@ if(WIN32)
     endforeach()
     
 else()
-    # Linux: используем pkg-config
+    # Linux: используем pkg-config или стандартный поиск
     find_package(PkgConfig QUIET)
     if(PKG_CONFIG_FOUND)
         pkg_check_modules(LIBPQ QUIET libpq)
         if(LIBPQ_FOUND)
             set(POSTGRESQL_INCLUDE_DIR ${LIBPQ_INCLUDE_DIRS})
             set(POSTGRESQL_LIBRARY ${LIBPQ_LIBRARIES})
+            message(STATUS "Found PostgreSQL via pkg-config")
         endif()
     endif()
     
@@ -157,7 +157,11 @@ else()
                 /usr/include/postgresql
                 /usr/include
                 /usr/local/include
+                /usr/include/postgresql/*/server
         )
+    endif()
+    
+    if(NOT POSTGRESQL_LIBRARY)
         find_library(POSTGRESQL_LIBRARY 
             NAMES pq
             PATHS
@@ -170,13 +174,14 @@ endif()
 
 # Проверка найденных путей
 if(NOT POSTGRESQL_INCLUDE_DIR)
-    message(FATAL_ERROR "PostgreSQL include directory not found!")
+    message(FATAL_ERROR "PostgreSQL include directory not found! Install libpq-dev or postgresql-devel")
 endif()
 
 if(NOT POSTGRESQL_LIBRARY)
-    message(FATAL_ERROR "PostgreSQL library not found!")
+    message(FATAL_ERROR "PostgreSQL library not found! Install libpq-dev or postgresql-devel")
 endif()
 
+# Для Windows проверяем bin directory
 if(WIN32 AND NOT POSTGRESQL_BIN_DIR)
     message(FATAL_ERROR "PostgreSQL bin directory not found!")
 endif()
@@ -210,9 +215,33 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/configs/ConfigManager.cpp")
     message(STATUS "Found: configs/ConfigManager.cpp")
 endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiService.cpp")
-    list(APPEND SOURCES "api/ApiService.cpp")
-    message(STATUS "Found: api/ApiService.cpp")
+# ЗАМЕНА: вместо api/ApiService.cpp используем три новых файла
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceMain.cpp")
+    list(APPEND SOURCES "api/ApiServiceMain.cpp")
+    message(STATUS "Found: api/ApiServiceMain.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceMain.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceRegister.cpp")
+    list(APPEND SOURCES "api/ApiServiceRegister.cpp")
+    message(STATUS "Found: api/ApiServiceRegister.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceRegister.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceWork.cpp")
+    list(APPEND SOURCES "api/ApiServiceWork.cpp")
+    message(STATUS "Found: api/ApiServiceWork.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceWork.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceLogin.cpp")
+    list(APPEND SOURCES "api/ApiServiceLogin.cpp")
+    message(STATUS "Found: api/ApiServiceLogin.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceLogin.cpp")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/LocaleManager.cpp")
@@ -282,11 +311,18 @@ else()
 endif()
 
 # Копирование конфига
-configure_file("${CMAKE_SOURCE_DIR}/config.json" "${CMAKE_BINARY_DIR}/config.json" COPYONLY)
+if(EXISTS "${CMAKE_SOURCE_DIR}/config.json")
+    configure_file("${CMAKE_SOURCE_DIR}/config.json" "${CMAKE_BINARY_DIR}/config.json" COPYONLY)
+    message(STATUS "Config file copied")
+else()
+    message(WARNING "config.json not found - creating default config")
+    file(WRITE "${CMAKE_BINARY_DIR}/config.json" "{\n    \"database\": {\n        \"host\": \"localhost\",\n        \"port\": 5432,\n        \"dbname\": \"student_management\",\n        \"user\": \"postgres\",\n        \"password\": \"password\"\n    },\n    \"api\": {\n        \"port\": 8080,\n        \"host\": \"localhost\"\n    },\n    \"locale\": \"en_US\"\n}")
+    message(STATUS "Default config.json created in build directory")
+endif()
 
-# ОПТИМИЗИРОВАННОЕ КОПИРОВАНИЕ DLL ДЛЯ WINDOWS
+# КОПИРОВАНИЕ DLL ТОЛЬКО ДЛЯ WINDOWS
 if(WIN32)
-    message(STATUS "Setting up optimized DLL copy for Windows...")
+    message(STATUS "Setting up DLL copy for Windows...")
     
     # Создаем цель для копирования только проверенных DLL
     add_custom_target(copy_required_dlls ALL
@@ -325,8 +361,10 @@ if(WIN32)
     
     # Проверка результата
     add_custom_command(TARGET copy_required_dlls POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E echo "Required DLL copy completed - only proven DLLs were copied"
+        COMMAND ${CMAKE_COMMAND} -E echo "Required DLL copy completed"
     )
+else()
+    message(STATUS "Skipping DLL copy (not on Windows)")
 endif()
 
 # Настройка выходных директорий
@@ -349,7 +387,7 @@ else()
 endif()
 if(WIN32)
     message(STATUS "Output: ${CMAKE_BINARY_DIR}/StudentManagementSystem.exe")
-    message(STATUS "DLL strategy: Copying only proven working DLLs")
+    message(STATUS "DLL strategy: Copying required DLLs")
 else()
     message(STATUS "Output: ${CMAKE_BINARY_DIR}/StudentManagementSystem")
 endif()
