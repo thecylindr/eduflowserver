@@ -1,0 +1,8 @@
+{
+    "database": "student_db",
+    "host": "localhost",
+    "language": "ru",
+    "password": "EduFlowTest",
+    "port": 5432,
+    "username": "student_app"
+}

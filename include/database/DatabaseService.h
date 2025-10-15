@@ -4,14 +4,10 @@
 #include "configs/ConfigManager.h"
 #include "models/Models.h"
 #include <vector>
-#include <libpq-fe.h>  // Добавляем заголовок PostgreSQL
+#include <string>
+#include <libpq-fe.h>  // Добавьте этот заголовок
 
 class DatabaseService {
-private:
-    PGconn* connection;
-    ConfigManager configManager;
-    DatabaseConfig currentConfig;
-
 public:
     DatabaseService();
     ~DatabaseService();
@@ -20,48 +16,54 @@ public:
     void disconnect();
     bool testConnection();
     bool setupDatabase();
-    void executeSQL(const std::string& sql);
-
+    
     // User management
     bool addUser(const User& user);
     bool updateUser(const User& user);
     User getUserByEmail(const std::string& email);
     User getUserById(int userId);
-
-    // Teacher operations
+    
+    // Teacher management
     std::vector<Teacher> getTeachers();
     bool addTeacher(const Teacher& teacher);
     bool updateTeacher(const Teacher& teacher);
     bool deleteTeacher(int teacherId);
     Teacher getTeacherById(int teacherId);
-
-    // Student operations
+    
+    // Student management
     std::vector<Student> getStudents();
     bool addStudent(const Student& student);
     bool updateStudent(const Student& student);
-    bool deleteStudent(int studentCode);
-    Student getStudentById(int studentCode);
-
-    // Group operations
+    bool deleteStudent(int studentId);
+    Student getStudentById(int studentId);
+    
+    // Group management
     std::vector<StudentGroup> getGroups();
     bool addGroup(const StudentGroup& group);
     bool updateGroup(const StudentGroup& group);
     bool deleteGroup(int groupId);
     StudentGroup getGroupById(int groupId);
-
-    // Portfolio operations
+    
+    // Portfolio management
     std::vector<StudentPortfolio> getPortfolios();
     bool addPortfolio(const StudentPortfolio& portfolio);
-
-    // Event operations
+    
+    // Event management
     std::vector<Event> getEvents();
     bool addEvent(const Event& event);
-
-    // Specialization operations
+    
+    // Specializations
     std::vector<std::string> getSpecializations();
 
-    // Добавляем публичный метод для получения конфигурации
+    // Get current config
     DatabaseConfig getCurrentConfig() const { return currentConfig; }
+
+private:
+    void executeSQL(const std::string& sql);
+    
+    PGconn* connection;
+    DatabaseConfig currentConfig;
+    ConfigManager configManager;
 };
 
 #endif

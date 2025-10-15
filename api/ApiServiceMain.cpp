@@ -11,6 +11,7 @@
 #ifndef _WIN32
     #include <fcntl.h>
     #include <errno.h>
+    #include <arpa/inet.h>  // Добавьте этот заголовок для inet_addr
 #endif
 
 using json = nlohmann::json;
@@ -84,13 +85,32 @@ bool ApiService::start() {
     
     // Setup server address from config
     sockaddr_in serverAddr;
+    memset(&serverAddr, 0, sizeof(serverAddr));  // Обнуляем структуру
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = inet_addr(apiConfig.host.c_str());
+    
+    // Используем INADDR_ANY для привязки ко всем интерфейсам
+    if (apiConfig.host == "0.0.0.0") {
+        serverAddr.sin_addr.s_addr = INADDR_ANY;
+    } else {
+        // Для конкретного адреса используем inet_addr
+        serverAddr.sin_addr.s_addr = inet_addr(apiConfig.host.c_str());
+        if (serverAddr.sin_addr.s_addr == INADDR_NONE) {
+            std::cerr << "Invalid host address: " << apiConfig.host << std::endl;
+            CLOSE_SOCKET(serverSocket);
+            return false;
+        }
+    }
+    
     serverAddr.sin_port = htons(apiConfig.port);
     
     // Bind socket
     if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         std::cerr << "Bind failed on " << apiConfig.host << ":" << apiConfig.port << std::endl;
+#ifdef _WIN32
+        std::cerr << "Error code: " << WSAGetLastError() << std::endl;
+#else
+        std::cerr << "Error: " << strerror(errno) << std::endl;
+#endif
         CLOSE_SOCKET(serverSocket);
         return false;
     }
@@ -98,6 +118,11 @@ bool ApiService::start() {
     // Start listening
     if (listen(serverSocket, apiConfig.maxConnections) < 0) {
         std::cerr << "Listen failed" << std::endl;
+#ifdef _WIN32
+        std::cerr << "Error code: " << WSAGetLastError() << std::endl;
+#else
+        std::cerr << "Error: " << strerror(errno) << std::endl;
+#endif
         CLOSE_SOCKET(serverSocket);
         return false;
     }
@@ -118,10 +143,18 @@ void ApiService::stop() {
     shutdownSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (shutdownSocket != INVALID_SOCKET_VAL) {
         sockaddr_in serverAddr;
+        memset(&serverAddr, 0, sizeof(serverAddr));
         serverAddr.sin_family = AF_INET;
-        serverAddr.sin_addr.s_addr = inet_addr(apiConfig.host.c_str());
+        
+        if (apiConfig.host == "0.0.0.0") {
+            serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        } else {
+            serverAddr.sin_addr.s_addr = inet_addr(apiConfig.host.c_str());
+        }
+        
         serverAddr.sin_port = htons(apiConfig.port);
         
+        // Неблокирующий connect
         connect(shutdownSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
         
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -142,6 +175,7 @@ void ApiService::stop() {
     std::cout << "API server stopped" << std::endl;
 }
 
+// Остальной код остается без изменений...
 void ApiService::runServer() {
     while (running) {
         sockaddr_in clientAddr;
@@ -504,6 +538,8 @@ std::string ApiService::getStudentsJson(const std::string& sessionToken) {
         studentJson["phoneNumber"] = student.phoneNumber;
         studentJson["email"] = student.email;
         studentJson["groupId"] = student.groupId;
+        studentJson["passportSeries"] = student.passportSeries;
+        studentJson["passportNumber"] = student.passportNumber;
         
         j.push_back(studentJson);
     }

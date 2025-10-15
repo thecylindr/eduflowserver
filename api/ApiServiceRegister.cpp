@@ -3,9 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <openssl/evp.h>
-
 using json = nlohmann::json;
-
 std::string ApiService::handleRegister(const std::string& body) {
     try {
         json j = json::parse(body);
@@ -39,26 +37,21 @@ std::string ApiService::handleRegister(const std::string& body) {
         return createJsonResponse("{\"error\": \"Invalid request format\"}", 400);
     }
 }
-
 std::string ApiService::hashPassword(const std::string& password) {
     EVP_MD_CTX* context = EVP_MD_CTX_new();
     const EVP_MD* md = EVP_sha256();
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int lengthOfHash = 0;
-
     if (!context) {
         return "";
     }
-
     if (EVP_DigestInit_ex(context, md, NULL) != 1 ||
         EVP_DigestUpdate(context, password.c_str(), password.length()) != 1 ||
         EVP_DigestFinal_ex(context, hash, &lengthOfHash) != 1) {
         EVP_MD_CTX_free(context);
         return "";
     }
-
     EVP_MD_CTX_free(context);
-
     std::stringstream ss;
     for (unsigned int i = 0; i < lengthOfHash; i++) {
         ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];

@@ -11,8 +11,10 @@ std::string ApiService::handleLogin(const std::string& body) {
         std::string password = j["password"];
         
         User user = dbService.getUserByEmail(email);
-        if (user.userId == 0 || user.passwordHash != hashPassword(password)) {
-            return createJsonResponse("{\"error\": \"Неверный пароль или email\"}", 401);
+        std::string hashedPassword = hashPassword(password);
+        
+        if (user.userId == 0 || user.passwordHash != hashedPassword) {
+            return createJsonResponse("{\"error\": \"Неверный пароль или e-mail.\"}", 401);
         }
         
         // Create session
@@ -39,7 +41,7 @@ std::string ApiService::handleLogin(const std::string& body) {
         
         return createJsonResponse(response.dump());
     } catch (const std::exception& e) {
-        return createJsonResponse("{\"error\": \"Invalid request format\"}", 400);
+        return createJsonResponse("{\"error\": \"Неверный формат запроса.\"}", 400);
     }
 }
 
@@ -73,7 +75,7 @@ std::string ApiService::handleForgotPassword(const std::string& body) {
         
         return createJsonResponse(response.dump());
     } catch (const std::exception& e) {
-        return createJsonResponse("{\"error\": \"Invalid request format\"}", 400);
+        return createJsonResponse("{\"error\": \"Неверный формат запроса.\"}", 400);
     }
 }
 

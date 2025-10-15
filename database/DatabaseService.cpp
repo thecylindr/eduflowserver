@@ -88,7 +88,9 @@ bool DatabaseService::setupDatabase() {
         "middle_name VARCHAR(100),"
         "phone_number VARCHAR(20),"
         "email VARCHAR(100),"
-        "group_id INTEGER REFERENCES student_groups(group_id))",
+        "group_id INTEGER REFERENCES student_groups(group_id),"
+        "passport_series VARCHAR(10) NOT NULL,"
+        "passport_number VARCHAR(10) NOT NULL)",
         
         "CREATE TABLE IF NOT EXISTS student_portfolio ("
         "portfolio_id SERIAL PRIMARY KEY,"
@@ -115,7 +117,7 @@ bool DatabaseService::setupDatabase() {
         "user_id SERIAL PRIMARY KEY,"
         "email VARCHAR(100) UNIQUE NOT NULL,"
         "phone_number VARCHAR(20),"
-        "password_hash VARCHAR(255) NOT NULL,"
+        "password_hash VARCHAR(24) NOT NULL,"
         "last_name VARCHAR(100) NOT NULL,"
         "first_name VARCHAR(100) NOT NULL,"
         "middle_name VARCHAR(100))"
@@ -325,17 +327,19 @@ bool DatabaseService::addStudent(const Student& student) {
         return false;
     }
     
-    std::string sql = "INSERT INTO students (last_name, first_name, middle_name, phone_number, email, group_id) VALUES ($1, $2, $3, $4, $5, $6)";
-    const char* params[6] = {
+    std::string sql = "INSERT INTO students (last_name, first_name, middle_name, phone_number, email, group_id, passport_series, passport_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)";
+    const char* params[8] = {
         student.lastName.c_str(),
         student.firstName.c_str(),
         student.middleName.c_str(),
         student.phoneNumber.c_str(),
         student.email.c_str(),
-        std::to_string(student.groupId).c_str()
+        std::to_string(student.groupId).c_str(),
+        student.passportSeries.c_str(),
+        student.passportNumber.c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     PQclear(res);
     
@@ -449,15 +453,14 @@ std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
 
 std::vector<Student> DatabaseService::getStudents() {
     std::vector<Student> students;
-
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
 
     if (!connection && !connect(currentConfig)) {
         return students;
     }
 
-    PGresult* res = PQexec(connection, "SELECT student_code, last_name, first_name, middle_name, phone_number, email, group_id FROM students");
+    PGresult* res = PQexec(connection, 
+        "SELECT student_code, last_name, first_name, middle_name, phone_number, email, group_id, passport_series, passport_number FROM students");
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
         std::cerr << "Ошибка выполнения запроса: " << PQerrorMessage(connection) << std::endl;
@@ -502,6 +505,14 @@ std::vector<Student> DatabaseService::getStudents() {
         // Безопасное чтение group_id
         if (!PQgetisnull(res, i, 6)) {
             student.groupId = std::stoi(PQgetvalue(res, i, 6));
+        }
+
+        // Паспортные данные
+        if (!PQgetisnull(res, i, 7)) {
+            student.passportSeries = PQgetvalue(res, i, 7);
+        }
+        if (!PQgetisnull(res, i, 8)) {
+            student.passportNumber = PQgetvalue(res, i, 8);
         }
 
         students.push_back(student);
@@ -561,18 +572,20 @@ bool DatabaseService::updateStudent(const Student& student) {
         return false;
     }
     
-    std::string sql = "UPDATE students SET last_name = $1, first_name = $2, middle_name = $3, phone_number = $4, email = $5, group_id = $6 WHERE student_code = $7";
-    const char* params[7] = {
+    std::string sql = "UPDATE students SET last_name = $1, first_name = $2, middle_name = $3, phone_number = $4, email = $5, group_id = $6, passport_series = $7, passport_number = $8 WHERE student_code = $9";
+    const char* params[9] = {
         student.lastName.c_str(),
         student.firstName.c_str(),
         student.middleName.c_str(),
         student.phoneNumber.c_str(),
         student.email.c_str(),
         std::to_string(student.groupId).c_str(),
+        student.passportSeries.c_str(),
+        student.passportNumber.c_str(),
         std::to_string(student.studentCode).c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 9, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     PQclear(res);
     
@@ -634,7 +647,7 @@ Student DatabaseService::getStudentById(int studentId) {
         return student;
     }
     
-    std::string sql = "SELECT student_code, last_name, first_name, middle_name, phone_number, email, group_id FROM students WHERE student_code = $1";
+    std::string sql = "SELECT student_code, last_name, first_name, middle_name, phone_number, email, group_id, passport_series, passport_number FROM students WHERE student_code = $1";
     const char* params[1] = { std::to_string(studentId).c_str() };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
@@ -650,6 +663,8 @@ Student DatabaseService::getStudentById(int studentId) {
     student.phoneNumber = PQgetvalue(res, 0, 4);
     student.email = PQgetvalue(res, 0, 5);
     student.groupId = std::stoi(PQgetvalue(res, 0, 6));
+    student.passportSeries = PQgetvalue(res, 0, 7);
+    student.passportNumber = PQgetvalue(res, 0, 8);
     
     PQclear(res);
     return student;
