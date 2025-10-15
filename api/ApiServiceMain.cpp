@@ -1,17 +1,15 @@
 #include "api/ApiService.h"
 #include "json.hpp"
 #include <sstream>
-#include <cstring>
-#include <iomanip>
-#include <sstream>
-#include <iostream>
-#include <openssl/rand.h>
 #include <regex>
+#include <iostream>
+#include <iomanip>
+#include <openssl/rand.h>  // Добавлен для RAND_bytes
 
 #ifndef _WIN32
     #include <fcntl.h>
     #include <errno.h>
-    #include <arpa/inet.h>  // Добавьте этот заголовок для inet_addr
+    #include <arpa/inet.h>
 #endif
 
 using json = nlohmann::json;
@@ -32,7 +30,7 @@ void ApiService::initializeNetwork() {
     WSADATA wsaData;
     int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != 0) {
-        std::cerr << "WSAStartup failed: " << result << std::endl;
+        // WSAStartup failed - ошибка инициализации сети
     }
 #endif
 }
@@ -46,56 +44,42 @@ void ApiService::cleanupNetwork() {
 bool ApiService::start() {
     if (running) return true;
     
-    // Загружаем конфигурацию API
     if (!configManager.loadApiConfig(apiConfig)) {
-        std::cerr << "Failed to load API configuration" << std::endl;
         return false;
     }
     
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == INVALID_SOCKET_VAL) {
-#ifdef _WIN32
-        std::cerr << "Failed to create socket: " << WSAGetLastError() << std::endl;
-#else
-        std::cerr << "Failed to create socket" << std::endl;
-#endif
         return false;
     }
     
-    // Set socket options
     int opt = 1;
 #ifdef _WIN32
-    u_long mode = 1; // non-blocking
+    u_long mode = 1;
     ioctlsocket(serverSocket, FIONBIO, &mode);
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
 #else
     int flags = fcntl(serverSocket, F_GETFL, 0);
     if (flags == -1) {
-        std::cerr << "fcntl F_GETFL failed" << std::endl;
         CLOSE_SOCKET(serverSocket);
         return false;
     }
     if (fcntl(serverSocket, F_SETFL, flags | O_NONBLOCK) == -1) {
-        std::cerr << "fcntl F_SETFL failed" << std::endl;
         CLOSE_SOCKET(serverSocket);
         return false;
     }
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 #endif
     
-    // Setup server address from config
     sockaddr_in serverAddr;
-    memset(&serverAddr, 0, sizeof(serverAddr));  // Обнуляем структуру
+    memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     
-    // Используем INADDR_ANY для привязки ко всем интерфейсам
     if (apiConfig.host == "0.0.0.0") {
         serverAddr.sin_addr.s_addr = INADDR_ANY;
     } else {
-        // Для конкретного адреса используем inet_addr
         serverAddr.sin_addr.s_addr = inet_addr(apiConfig.host.c_str());
         if (serverAddr.sin_addr.s_addr == INADDR_NONE) {
-            std::cerr << "Invalid host address: " << apiConfig.host << std::endl;
             CLOSE_SOCKET(serverSocket);
             return false;
         }
@@ -103,26 +87,12 @@ bool ApiService::start() {
     
     serverAddr.sin_port = htons(apiConfig.port);
     
-    // Bind socket
     if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        std::cerr << "Bind failed on " << apiConfig.host << ":" << apiConfig.port << std::endl;
-#ifdef _WIN32
-        std::cerr << "Error code: " << WSAGetLastError() << std::endl;
-#else
-        std::cerr << "Error: " << strerror(errno) << std::endl;
-#endif
         CLOSE_SOCKET(serverSocket);
         return false;
     }
     
-    // Start listening
     if (listen(serverSocket, apiConfig.maxConnections) < 0) {
-        std::cerr << "Listen failed" << std::endl;
-#ifdef _WIN32
-        std::cerr << "Error code: " << WSAGetLastError() << std::endl;
-#else
-        std::cerr << "Error: " << strerror(errno) << std::endl;
-#endif
         CLOSE_SOCKET(serverSocket);
         return false;
     }
@@ -130,7 +100,6 @@ bool ApiService::start() {
     running = true;
     serverThread = std::thread(&ApiService::runServer, this);
     
-    std::cout << "API server started on http://" << apiConfig.host << ":" << apiConfig.port << std::endl;
     return true;
 }
 
@@ -139,7 +108,6 @@ void ApiService::stop() {
     
     running = false;
     
-    // Create temporary connection to unblock accept()
     shutdownSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (shutdownSocket != INVALID_SOCKET_VAL) {
         sockaddr_in serverAddr;
@@ -154,7 +122,6 @@ void ApiService::stop() {
         
         serverAddr.sin_port = htons(apiConfig.port);
         
-        // Неблокирующий connect
         connect(shutdownSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
         
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -171,11 +138,8 @@ void ApiService::stop() {
     if (serverThread.joinable()) {
         serverThread.join();
     }
-    
-    std::cout << "API server stopped" << std::endl;
 }
 
-// Остальной код остается без изменений...
 void ApiService::runServer() {
     while (running) {
         sockaddr_in clientAddr;
@@ -193,18 +157,17 @@ void ApiService::runServer() {
 #ifdef _WIN32
             int error = WSAGetLastError();
             if (error != WSAEWOULDBLOCK) {
-                std::cerr << "Accept failed: " << error << std::endl;
+                // Accept failed - ошибка принятия соединения
             }
 #else
             if (errno != EWOULDBLOCK && errno != EAGAIN) {
-                std::cerr << "Accept failed: " << strerror(errno) << std::endl;
+                // Accept failed - ошибка принятия соединения
             }
 #endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
         
-        // Handle client in separate thread for better performance
         std::thread clientThread(&ApiService::handleClient, this, clientSocket);
         clientThread.detach();
     }
@@ -230,16 +193,13 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
     
     std::string response;
     
-    // Parse HTTP method and path
     std::istringstream iss(request);
     std::string method, path, protocol;
     iss >> method >> path >> protocol;
     
-    // Handle CORS preflight
     if (method == "OPTIONS") {
         response = createJsonResponse("", 200);
         
-        // Send response immediately for OPTIONS
 #ifdef _WIN32
         send(clientSocket, response.c_str(), response.length(), 0);
 #else
@@ -249,7 +209,6 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
         return;
     }
     
-    // Extract headers
     std::unordered_map<std::string, std::string> headers;
     std::string line;
     while (std::getline(iss, line) && line != "\r") {
@@ -264,7 +223,6 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
         }
     }
     
-    // Extract body for POST/PUT requests
     std::string body;
     if (method == "POST" || method == "PUT") {
         size_t bodyPos = request.find("\r\n\r\n");
@@ -273,7 +231,6 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
         }
     }
     
-    // Extract session token from headers
     std::string sessionToken;
     if (headers.find("Authorization") != headers.end()) {
         std::string authHeader = headers["Authorization"];
@@ -282,7 +239,6 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
         }
     }
     
-    // Route requests with regex for dynamic parameters
     std::regex teacherRegex("^/teachers/(\\d+)$");
     std::regex studentRegex("^/students/(\\d+)$");
     std::regex groupRegex("^/groups/(\\d+)$");
@@ -421,10 +377,9 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
             response = handleUpdateProfile(body, sessionToken);
         }
     } else {
-        response = createJsonResponse("{\"message\": \"Welcome to EduFlow API! Available endpoints: /register, /login, /forgot-password, /reset-password, /logout, /profile, /teachers, /students, /groups, /portfolio, /events, /specializations, /api/status\"}");
+        response = createJsonResponse("{\"message\": \"Welcome to EduFlow API!\"}");
     }
 
-    // Send response
 #ifdef _WIN32
     send(clientSocket, response.c_str(), response.length(), 0);
 #else
@@ -480,7 +435,6 @@ bool ApiService::validateSession(const std::string& token) {
     auto it = sessions.find(token);
     if (it == sessions.end()) return false;
     
-    // Check if session is expired (from config)
     auto now = std::chrono::system_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::hours>(now - it->second.createdAt);
     if (duration.count() > apiConfig.sessionTimeoutHours) {
@@ -497,179 +451,4 @@ std::string ApiService::getUserIdFromSession(const std::string& token) {
     std::lock_guard<std::mutex> lock(sessionsMutex);
     auto it = sessions.find(token);
     return it != sessions.end() ? it->second.userId : "";
-}
-
-std::string ApiService::getProfile(const std::string& sessionToken) {
-    std::string userId = getUserIdFromSession(sessionToken);
-    if (userId.empty()) {
-        return createJsonResponse("{\"error\": \"Invalid session\"}", 401);
-    }
-    
-    User user = dbService.getUserById(std::stoi(userId));
-    if (user.userId == 0) {
-        return createJsonResponse("{\"error\": \"User not found\"}", 404);
-    }
-    
-    json userJson;
-    userJson["userId"] = user.userId;
-    userJson["email"] = user.email;
-    userJson["firstName"] = user.firstName;
-    userJson["lastName"] = user.lastName;
-    userJson["middleName"] = user.middleName;
-    userJson["phoneNumber"] = user.phoneNumber;
-    
-    return createJsonResponse(userJson.dump());
-}
-
-std::string ApiService::getStudentsJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    auto students = dbService.getStudents();
-    json j = json::array();
-    
-    for (const auto& student : students) {
-        json studentJson;
-        studentJson["studentCode"] = student.studentCode;
-        studentJson["lastName"] = student.lastName;
-        studentJson["firstName"] = student.firstName;
-        studentJson["middleName"] = student.middleName;
-        studentJson["phoneNumber"] = student.phoneNumber;
-        studentJson["email"] = student.email;
-        studentJson["groupId"] = student.groupId;
-        studentJson["passportSeries"] = student.passportSeries;
-        studentJson["passportNumber"] = student.passportNumber;
-        
-        j.push_back(studentJson);
-    }
-    
-    return createJsonResponse(j.dump(4));
-}
-
-std::string ApiService::getTeachersJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    auto teachers = dbService.getTeachers();
-    json j = json::array();
-    
-    for (const auto& teacher : teachers) {
-        json teacherJson;
-        teacherJson["teacherId"] = teacher.teacherId;
-        teacherJson["lastName"] = teacher.lastName;
-        teacherJson["firstName"] = teacher.firstName;
-        teacherJson["middleName"] = teacher.middleName;
-        teacherJson["experience"] = teacher.experience;
-        teacherJson["specialization"] = teacher.specialization;
-        teacherJson["email"] = teacher.email;
-        teacherJson["phoneNumber"] = teacher.phoneNumber;
-        
-        j.push_back(teacherJson);
-    }
-    
-    return createJsonResponse(j.dump(4));
-}
-
-std::string ApiService::getGroupsJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    auto groups = dbService.getGroups();
-    json j = json::array();
-    
-    for (const auto& group : groups) {
-        json groupJson;
-        groupJson["groupId"] = group.groupId;
-        groupJson["name"] = group.name;
-        groupJson["studentCount"] = group.studentCount;
-        groupJson["teacherId"] = group.teacherId;
-        
-        j.push_back(groupJson);
-    }
-    
-    return createJsonResponse(j.dump(4));
-}
-
-std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    auto portfolios = dbService.getPortfolios();
-    json j = json::array();
-    
-    for (const auto& portfolio : portfolios) {
-        json portfolioJson;
-        portfolioJson["portfolioId"] = portfolio.portfolioId;
-        portfolioJson["studentCode"] = portfolio.studentCode;
-        portfolioJson["measureCode"] = portfolio.measureCode;
-        portfolioJson["date"] = portfolio.date;
-        portfolioJson["passportSeries"] = portfolio.passportSeries;
-        portfolioJson["passportNumber"] = portfolio.passportNumber;
-        
-        j.push_back(portfolioJson);
-    }
-    
-    return createJsonResponse(j.dump(4));
-}
-
-std::string ApiService::getEventsJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    auto events = dbService.getEvents();
-    json j = json::array();
-    
-    for (const auto& event : events) {
-        json eventJson;
-        eventJson["eventId"] = event.eventId;
-        eventJson["eventCategory"] = event.eventCategory;
-        eventJson["eventType"] = event.eventType;
-        eventJson["startDate"] = event.startDate;
-        eventJson["endDate"] = event.endDate;
-        eventJson["location"] = event.location;
-        eventJson["lore"] = event.lore;
-        
-        j.push_back(eventJson);
-    }
-    
-    return createJsonResponse(j.dump(4));
-}
-
-std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    auto specializations = dbService.getSpecializations();
-    json j = json::array();
-    
-    for (const auto& specialization : specializations) {
-        j.push_back(specialization);
-    }
-    
-    return createJsonResponse(j.dump(4));
-}
-
-std::string ApiService::handleStatus() {
-    json response;
-    response["status"] = "running";
-    response["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    
-    std::lock_guard<std::mutex> lock(sessionsMutex);
-    response["activeSessions"] = sessions.size();
-    response["databaseConnected"] = dbService.testConnection();
-    response["apiConfig"] = {
-        {"port", apiConfig.port},
-        {"host", apiConfig.host},
-        {"maxConnections", apiConfig.maxConnections},
-        {"sessionTimeoutHours", apiConfig.sessionTimeoutHours}
-    };
-    
-    return createJsonResponse(response.dump());
 }

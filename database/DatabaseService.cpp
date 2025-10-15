@@ -26,7 +26,6 @@ bool DatabaseService::connect(const DatabaseConfig& config) {
     connection = PQconnectdb(connStr.c_str());
     
     if (PQstatus(connection) != CONNECTION_OK) {
-        //std::cerr << "Connection to database failed: " << PQerrorMessage(connection) << std::endl;
         PQfinish(connection);
         connection = nullptr;
         return false;
@@ -43,7 +42,6 @@ void DatabaseService::disconnect() {
 }
 
 bool DatabaseService::testConnection() {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед тестом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -53,7 +51,6 @@ bool DatabaseService::testConnection() {
 }
 
 bool DatabaseService::setupDatabase() {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед настройкой БД
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -97,8 +94,7 @@ bool DatabaseService::setupDatabase() {
         "student_code INTEGER REFERENCES students(student_code),"
         "measure_code INTEGER NOT NULL UNIQUE,"
         "date DATE NOT NULL,"
-        "passport_series VARCHAR(10) NOT NULL,"
-        "passport_number VARCHAR(10) NOT NULL)",
+        "decree INTEGER NOT NULL)",
 
         "CREATE TABLE IF NOT EXISTS event ("
         "event_id INTEGER REFERENCES student_portfolio(measure_code),"
@@ -116,8 +112,9 @@ bool DatabaseService::setupDatabase() {
         "CREATE TABLE IF NOT EXISTS users ("
         "user_id SERIAL PRIMARY KEY,"
         "email VARCHAR(100) UNIQUE NOT NULL,"
+        "login VARCHAR(24) NOT NULL,"
         "phone_number VARCHAR(20),"
-        "password_hash VARCHAR(24) NOT NULL,"
+        "password_hash TEXT NOT NULL,"
         "last_name VARCHAR(100) NOT NULL,"
         "first_name VARCHAR(100) NOT NULL,"
         "middle_name VARCHAR(100))"
@@ -132,7 +129,6 @@ bool DatabaseService::setupDatabase() {
 }
 
 void DatabaseService::executeSQL(const std::string& sql) {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед выполнением SQL
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) return;
@@ -144,18 +140,17 @@ void DatabaseService::executeSQL(const std::string& sql) {
     PQclear(res);
 }
 
-// User management methods
 bool DatabaseService::addUser(const User& user) {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return false;
     }
     
-    std::string sql = "INSERT INTO users (email, phone_number, password_hash, last_name, first_name, middle_name) VALUES ($1, $2, $3, $4, $5, $6)";
-    const char* params[6] = {
+    std::string sql = "INSERT INTO users (email, login, phone_number, password_hash, last_name, first_name, middle_name) VALUES ($1, $2, $3, $4, $5, $6, $7)";
+    const char* params[7] = {
         user.email.c_str(),
+        user.login.c_str(),
         user.phoneNumber.c_str(),
         user.passwordHash.c_str(),
         user.lastName.c_str(),
@@ -163,15 +158,132 @@ bool DatabaseService::addUser(const User& user) {
         user.middleName.c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    PQclear(res);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
     
-    return success;
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        PQclear(res);
+        return false;
+    }
+    
+    PQclear(res);
+    return true;
+}
+
+User DatabaseService::getUserByEmail(const std::string& email) {
+    User user;
+    user.userId = 0;
+    
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return user;
+    }
+    
+    std::string sql = "SELECT user_id, login, email, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE email = $1";
+    const char* params[1] = { email.c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return user;
+    }
+    
+    if (PQntuples(res) == 0) {
+        PQclear(res);
+        return user;
+    }
+    
+    user.userId = std::stoi(PQgetvalue(res, 0, 0));
+    user.login = PQgetvalue(res, 0, 1);
+    user.email = PQgetvalue(res, 0, 2);
+    user.phoneNumber = PQgetvalue(res, 0, 3);
+    user.passwordHash = PQgetvalue(res, 0, 4);
+    user.lastName = PQgetvalue(res, 0, 5);
+    user.firstName = PQgetvalue(res, 0, 6);
+    user.middleName = PQgetvalue(res, 0, 7);
+    
+    PQclear(res);
+    return user;
+}
+
+User DatabaseService::getUserByLogin(const std::string& login) {
+    User user;
+    user.userId = 0;
+    
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return user;
+    }
+    
+    std::string sql = "SELECT user_id, login, email, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE login = $1";
+    const char* params[1] = { login.c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return user;
+    }
+    
+    if (PQntuples(res) == 0) {
+        PQclear(res);
+        return user;
+    }
+    
+    user.userId = std::stoi(PQgetvalue(res, 0, 0));
+    user.login = PQgetvalue(res, 0, 1);
+    user.email = PQgetvalue(res, 0, 2);
+    user.phoneNumber = PQgetvalue(res, 0, 3);
+    user.passwordHash = PQgetvalue(res, 0, 4);
+    user.lastName = PQgetvalue(res, 0, 5);
+    user.firstName = PQgetvalue(res, 0, 6);
+    user.middleName = PQgetvalue(res, 0, 7);
+    
+    PQclear(res);
+    return user;
+}
+
+User DatabaseService::getUserByPhoneNumber(const std::string& phoneNumber) {
+    User user;
+    user.userId = 0;
+    
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return user;
+    }
+    
+    std::string sql = "SELECT user_id, login, email, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE phone_number = $1";
+    const char* params[1] = { phoneNumber.c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return user;
+    }
+    
+    if (PQntuples(res) == 0) {
+        PQclear(res);
+        return user;
+    }
+    
+    user.userId = std::stoi(PQgetvalue(res, 0, 0));
+    user.login = PQgetvalue(res, 0, 1);
+    user.email = PQgetvalue(res, 0, 2);
+    user.phoneNumber = PQgetvalue(res, 0, 3);
+    user.passwordHash = PQgetvalue(res, 0, 4);
+    user.lastName = PQgetvalue(res, 0, 5);
+    user.firstName = PQgetvalue(res, 0, 6);
+    user.middleName = PQgetvalue(res, 0, 7);
+    
+    PQclear(res);
+    return user;
 }
 
 bool DatabaseService::updateUser(const User& user) {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед обновлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -196,39 +308,8 @@ bool DatabaseService::updateUser(const User& user) {
     return success;
 }
 
-User DatabaseService::getUserByEmail(const std::string& email) {
-    User user;
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
-    configManager.loadConfig(currentConfig);
-    
-    if (!connection && !connect(currentConfig)) {
-        return user;
-    }
-    
-    std::string sql = "SELECT user_id, email, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE email = $1";
-    const char* params[1] = { email.c_str() };
-    
-    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-        PQclear(res);
-        return user;
-    }
-    
-    user.userId = std::stoi(PQgetvalue(res, 0, 0));
-    user.email = PQgetvalue(res, 0, 1);
-    user.phoneNumber = PQgetvalue(res, 0, 2);
-    user.passwordHash = PQgetvalue(res, 0, 3);
-    user.lastName = PQgetvalue(res, 0, 4);
-    user.firstName = PQgetvalue(res, 0, 5);
-    user.middleName = PQgetvalue(res, 0, 6);
-    
-    PQclear(res);
-    return user;
-}
-
 User DatabaseService::getUserById(int userId) {
     User user;
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -239,7 +320,13 @@ User DatabaseService::getUserById(int userId) {
     const char* params[1] = { std::to_string(userId).c_str() };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+    
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return user;
+    }
+    
+    if (PQntuples(res) == 0) {
         PQclear(res);
         return user;
     }
@@ -256,11 +343,9 @@ User DatabaseService::getUserById(int userId) {
     return user;
 }
 
-// Existing methods remain the same...
 std::vector<Teacher> DatabaseService::getTeachers() {
     std::vector<Teacher> teachers;
     
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) return teachers;
@@ -293,7 +378,6 @@ std::vector<Teacher> DatabaseService::getTeachers() {
 std::vector<StudentGroup> DatabaseService::getGroups() {
     std::vector<StudentGroup> groups;
     
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) return groups;
@@ -320,7 +404,6 @@ std::vector<StudentGroup> DatabaseService::getGroups() {
 }
 
 bool DatabaseService::addStudent(const Student& student) {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -347,7 +430,6 @@ bool DatabaseService::addStudent(const Student& student) {
 }
 
 bool DatabaseService::addTeacher(const Teacher& teacher) {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -373,7 +455,6 @@ bool DatabaseService::addTeacher(const Teacher& teacher) {
 }
 
 bool DatabaseService::addGroup(const StudentGroup& group) {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -395,7 +476,6 @@ bool DatabaseService::addGroup(const StudentGroup& group) {
 }
 
 bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед добавлением
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -421,7 +501,6 @@ bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
 std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
     std::vector<StudentPortfolio> portfolios;
     
-    // ПЕРЕЗАГРУЖАЕМ конфигурацию перед запросом
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
@@ -472,42 +551,34 @@ std::vector<Student> DatabaseService::getStudents() {
     for (int i = 0; i < rows; i++) {
         Student student;
 
-        // Безопасное чтение student_code
         if (!PQgetisnull(res, i, 0)) {
             student.studentCode = std::stoi(PQgetvalue(res, i, 0));
         }
 
-        // Безопасное чтение last_name
         if (!PQgetisnull(res, i, 1)) {
             student.lastName = PQgetvalue(res, i, 1);
         }
 
-        // Безопасное чтение first_name
         if (!PQgetisnull(res, i, 2)) {
             student.firstName = PQgetvalue(res, i, 2);
         }
 
-        // Безопасное чтение middle_name (может быть NULL)
         if (!PQgetisnull(res, i, 3)) {
             student.middleName = PQgetvalue(res, i, 3);
         }
 
-        // Безопасное чтение phone_number (может быть NULL)
         if (!PQgetisnull(res, i, 4)) {
             student.phoneNumber = PQgetvalue(res, i, 4);
         }
 
-        // Безопасное чтение email (может быть NULL)
         if (!PQgetisnull(res, i, 5)) {
             student.email = PQgetvalue(res, i, 5);
         }
 
-        // Безопасное чтение group_id
         if (!PQgetisnull(res, i, 6)) {
             student.groupId = std::stoi(PQgetvalue(res, i, 6));
         }
 
-        // Паспортные данные
         if (!PQgetisnull(res, i, 7)) {
             student.passportSeries = PQgetvalue(res, i, 7);
         }

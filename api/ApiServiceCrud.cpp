@@ -3,7 +3,6 @@
 
 using json = nlohmann::json;
 
-// Teacher CRUD operations
 std::string ApiService::handleAddTeacher(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -74,7 +73,6 @@ std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& se
     }
 }
 
-// Student CRUD operations
 std::string ApiService::handleAddStudent(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -90,6 +88,8 @@ std::string ApiService::handleAddStudent(const std::string& body, const std::str
         student.phoneNumber = j.value("phone_number", "");
         student.email = j.value("email", "");
         student.groupId = j["group_id"];
+        student.passportSeries = j["passport_series"];
+        student.passportNumber = j["passport_number"];
         
         if (dbService.addStudent(student)) {
             return createJsonResponse("{\"message\": \"Student added successfully\"}", 201);
@@ -120,6 +120,8 @@ std::string ApiService::handleUpdateStudent(const std::string& body, int student
         if (j.contains("phone_number")) student.phoneNumber = j["phone_number"];
         if (j.contains("email")) student.email = j["email"];
         if (j.contains("group_id")) student.groupId = j["group_id"];
+        if (j.contains("passport_series")) student.passportSeries = j["passport_series"];
+        if (j.contains("passport_number")) student.passportNumber = j["passport_number"];
         
         if (dbService.updateStudent(student)) {
             return createJsonResponse("{\"message\": \"Student updated successfully\"}");
@@ -143,7 +145,6 @@ std::string ApiService::handleDeleteStudent(int studentId, const std::string& se
     }
 }
 
-// Group CRUD operations
 std::string ApiService::handleAddGroup(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -206,7 +207,6 @@ std::string ApiService::handleDeleteGroup(int groupId, const std::string& sessio
     }
 }
 
-// Portfolio operations
 std::string ApiService::handleAddPortfolio(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -219,8 +219,8 @@ std::string ApiService::handleAddPortfolio(const std::string& body, const std::s
         portfolio.studentCode = j["student_code"];
         portfolio.measureCode = j["measure_code"];
         portfolio.date = j["date"];
-        portfolio.passportSeries = j["passport_series"];
-        portfolio.passportNumber = j["passport_number"];
+        portfolio.passportSeries = j.value("passport_series", "");
+        portfolio.passportNumber = j.value("passport_number", "");
         
         if (dbService.addPortfolio(portfolio)) {
             return createJsonResponse("{\"message\": \"Portfolio item added successfully\"}", 201);
@@ -232,7 +232,6 @@ std::string ApiService::handleAddPortfolio(const std::string& body, const std::s
     }
 }
 
-// Event operations
 std::string ApiService::handleAddEvent(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -260,7 +259,6 @@ std::string ApiService::handleAddEvent(const std::string& body, const std::strin
     }
 }
 
-// Profile operations
 std::string ApiService::handleUpdateProfile(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -284,7 +282,6 @@ std::string ApiService::handleUpdateProfile(const std::string& body, const std::
         if (j.contains("firstName")) user.firstName = j["firstName"];
         if (j.contains("middleName")) user.middleName = j["middleName"];
         
-        // If password is being updated, hash the new password
         if (j.contains("password")) {
             user.passwordHash = hashPassword(j["password"]);
         }

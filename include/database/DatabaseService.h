@@ -21,7 +21,10 @@ public:
     bool addUser(const User& user);
     bool updateUser(const User& user);
     User getUserByEmail(const std::string& email);
+    User getUserByUsername(const std::string& username);
     User getUserById(int userId);
+    User getUserByLogin(const std::string& login);
+    User getUserByPhoneNumber(const std::string& phoneNumber);
     
     // Teacher management
     std::vector<Teacher> getTeachers();

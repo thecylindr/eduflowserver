@@ -31,6 +31,7 @@ struct ApiConfig {
 struct User {
     int userId;
     std::string email;
+    std::string login;
     std::string phoneNumber;
     std::string passwordHash;
     std::string lastName;
