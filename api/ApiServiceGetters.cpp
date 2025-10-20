@@ -1,14 +1,23 @@
 #include "api/ApiService.h"
 #include "json.hpp"
+#include <mutex>
 
 using json = nlohmann::json;
 
+// ДОБАВИМ МЬЮТЕКС ДЛЯ ЗАЩИТЫ БАЗЫ ДАННЫХ
+static std::mutex dbMutex;
+
 std::string ApiService::getProfile(const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+    }
+    
     std::string userId = getUserIdFromSession(sessionToken);
     if (userId.empty()) {
         return createJsonResponse("{\"error\": \"Invalid session\"}", 401);
     }
     
+    std::lock_guard<std::mutex> lock(dbMutex);
     User user = dbService.getUserById(std::stoi(userId));
     if (user.userId == 0) {
         return createJsonResponse("{\"error\": \"User not found\"}", 404);
@@ -30,6 +39,7 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
     
+    std::lock_guard<std::mutex> lock(dbMutex);
     auto teachers = dbService.getTeachers();
     json j = json::array();
     
@@ -47,7 +57,7 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         j.push_back(teacherJson);
     }
     
-    return createJsonResponse(j.dump(4));
+    return createJsonResponse(j.dump());
 }
 
 std::string ApiService::getStudentsJson(const std::string& sessionToken) {
@@ -55,6 +65,7 @@ std::string ApiService::getStudentsJson(const std::string& sessionToken) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
     
+    std::lock_guard<std::mutex> lock(dbMutex);
     auto students = dbService.getStudents();
     json j = json::array();
     
@@ -73,7 +84,7 @@ std::string ApiService::getStudentsJson(const std::string& sessionToken) {
         j.push_back(studentJson);
     }
     
-    return createJsonResponse(j.dump(4));
+    return createJsonResponse(j.dump());
 }
 
 std::string ApiService::getGroupsJson(const std::string& sessionToken) {
@@ -81,6 +92,7 @@ std::string ApiService::getGroupsJson(const std::string& sessionToken) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
     
+    std::lock_guard<std::mutex> lock(dbMutex);
     auto groups = dbService.getGroups();
     json j = json::array();
     
@@ -94,7 +106,7 @@ std::string ApiService::getGroupsJson(const std::string& sessionToken) {
         j.push_back(groupJson);
     }
     
-    return createJsonResponse(j.dump(4));
+    return createJsonResponse(j.dump());
 }
 
 std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
@@ -102,6 +114,7 @@ std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
     
+    std::lock_guard<std::mutex> lock(dbMutex);
     auto portfolios = dbService.getPortfolios();
     json j = json::array();
     
@@ -117,7 +130,7 @@ std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
         j.push_back(portfolioJson);
     }
     
-    return createJsonResponse(j.dump(4));
+    return createJsonResponse(j.dump());
 }
 
 std::string ApiService::getEventsJson(const std::string& sessionToken) {
@@ -125,6 +138,7 @@ std::string ApiService::getEventsJson(const std::string& sessionToken) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
     
+    std::lock_guard<std::mutex> lock(dbMutex);
     auto events = dbService.getEvents();
     json j = json::array();
     
@@ -141,7 +155,7 @@ std::string ApiService::getEventsJson(const std::string& sessionToken) {
         j.push_back(eventJson);
     }
     
-    return createJsonResponse(j.dump(4));
+    return createJsonResponse(j.dump());
 }
 
 std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
@@ -149,6 +163,7 @@ std::string ApiService::getSpecializationsJson(const std::string& sessionToken) 
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
     
+    std::lock_guard<std::mutex> lock(dbMutex);
     auto specializations = dbService.getSpecializations();
     json j = json::array();
     
@@ -156,7 +171,7 @@ std::string ApiService::getSpecializationsJson(const std::string& sessionToken) 
         j.push_back(specialization);
     }
     
-    return createJsonResponse(j.dump(4));
+    return createJsonResponse(j.dump());
 }
 
 std::string ApiService::handleStatus() {
@@ -167,7 +182,12 @@ std::string ApiService::handleStatus() {
     
     std::lock_guard<std::mutex> lock(sessionsMutex);
     response["activeSessions"] = sessions.size();
-    response["databaseConnected"] = dbService.testConnection();
+    
+    {
+        std::lock_guard<std::mutex> dbLock(dbMutex);
+        response["databaseConnected"] = dbService.testConnection();
+    }
+    
     response["apiConfig"] = {
         {"port", apiConfig.port},
         {"host", apiConfig.host},

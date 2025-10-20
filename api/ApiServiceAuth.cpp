@@ -20,6 +20,8 @@ std::string ApiService::handleRegister(const std::string& body) {
         std::string middleName = j.value("middleName", "");
         std::string phoneNumber = j.value("phoneNumber", "");
         
+        std::cout << "👤 Registration attempt - Username: " << username << ", Email: " << email << std::endl;
+        
         // Проверка российских доменов почты
         std::vector<std::string> russianDomains = {
             "ya.ru", "yandex.ru", "mail.ru", "bk.ru", "list.ru", 
@@ -28,6 +30,7 @@ std::string ApiService::handleRegister(const std::string& body) {
         
         size_t atPos = email.find('@');
         if (atPos == std::string::npos) {
+            std::cout << "❌ Invalid email format: " << email << std::endl;
             return createJsonResponse("{\"error\": \"Неверный формат почты\"}", 400);
         }
         
@@ -43,23 +46,27 @@ std::string ApiService::handleRegister(const std::string& body) {
         }
         
         if (!validDomain) {
+            std::cout << "❌ Non-Russian email domain: " << domain << std::endl;
             return createJsonResponse("{\"error\": \"Регистрация разрешена только с российскими доменами почты\"}", 400);
         }
         
         // Проверка существования пользователя
         User existingUserByEmail = dbService.getUserByEmail(email);
         if (existingUserByEmail.userId != 0) {
+            std::cout << "❌ User with email already exists: " << email << std::endl;
             return createJsonResponse("{\"error\": \"Пользователь с такой почтой уже существует\"}", 400);
         }
         
         User existingUserByLogin = dbService.getUserByLogin(username);
         if (existingUserByLogin.userId != 0) {
+            std::cout << "❌ User with login already exists: " << username << std::endl;
             return createJsonResponse("{\"error\": \"Пользователь с таким логином уже существует\"}", 400);
         }
         
         if (!phoneNumber.empty()) {
             User existingUserByPhone = dbService.getUserByPhoneNumber(phoneNumber);
             if (existingUserByPhone.userId != 0) {
+                std::cout << "❌ User with phone already exists: " << phoneNumber << std::endl;
                 return createJsonResponse("{\"error\": \"Пользователь с таким номером телефона уже существует\"}", 400);
             }
         }
@@ -74,122 +81,161 @@ std::string ApiService::handleRegister(const std::string& body) {
         user.middleName = middleName;
         user.phoneNumber = phoneNumber;
         
+        std::cout << "🔑 Password hash generated, length: " << user.passwordHash.length() << std::endl;
+        
         if (dbService.addUser(user)) {
+            std::cout << "✅ User registered successfully: " << email << std::endl;
             return createJsonResponse("{\"message\": \"Регистрация успешна! Теперь вы можете войти в систему.\"}", 201);
         } else {
+            std::cout << "❌ Failed to add user to database: " << email << std::endl;
             return createJsonResponse("{\"error\": \"Ошибка регистрации. Попробуйте еще раз.\"}", 500);
         }
     } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleRegister: " << e.what() << std::endl;
         return createJsonResponse("{\"error\": \"Неверный формат запроса\"}", 400);
     }
 }
 
 std::string ApiService::hashPassword(const std::string& password) {
+    if (password.empty()) {
+        return "";
+    }
+
     EVP_MD_CTX* context = EVP_MD_CTX_new();
+    if (!context) {
+        std::cout << "❌ Failed to create EVP_MD_CTX" << std::endl;
+        return "";
+    }
+
     const EVP_MD* md = EVP_sha256();
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int lengthOfHash = 0;
-    
-    if (!context) {
-        return "";
-    }
-    
-    if (EVP_DigestInit_ex(context, md, NULL) != 1 ||
-        EVP_DigestUpdate(context, password.c_str(), password.length()) != 1 ||
-        EVP_DigestFinal_ex(context, hash, &lengthOfHash) != 1) {
+
+    // Инициализация
+    if (EVP_DigestInit_ex(context, md, nullptr) != 1) {
+        std::cout << "❌ EVP_DigestInit_ex failed" << std::endl;
         EVP_MD_CTX_free(context);
         return "";
     }
-    
+
+    // Обновление
+    if (EVP_DigestUpdate(context, password.c_str(), password.length()) != 1) {
+        std::cout << "❌ EVP_DigestUpdate failed" << std::endl;
+        EVP_MD_CTX_free(context);
+        return "";
+    }
+
+    // Финальное вычисление
+    if (EVP_DigestFinal_ex(context, hash, &lengthOfHash) != 1) {
+        std::cout << "❌ EVP_DigestFinal_ex failed" << std::endl;
+        EVP_MD_CTX_free(context);
+        return "";
+    }
+
     EVP_MD_CTX_free(context);
+
+    // Конвертация в hex
     std::stringstream ss;
     for (unsigned int i = 0; i < lengthOfHash; i++) {
-        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
     }
-    
+
     return ss.str();
 }
 
 
 std::string ApiService::handleLogin(const std::string& body) {
     try {
+        if (body.empty()) {
+            return createJsonResponse("{\"error\": \"Empty request body\"}", 400);
+        }
+
         json j = json::parse(body);
-        std::string emailOrLogin = j["email"]; // Поле теперь может содержать email или логин
+        
+        if (!j.contains("email") || !j.contains("password")) {
+            return createJsonResponse("{\"error\": \"Missing email or password\"}", 400);
+        }
+
+        std::string emailOrLogin = j["email"];
         std::string password = j["password"];
-        
-        //std::cout << "🔐 Attempting login for: " << emailOrLogin << std::endl;
-        
-        User user;
-        
-        // Сначала пытаемся найти пользователя по email
-        user = dbService.getUserByEmail(emailOrLogin);
-        
-        // Если не нашли по email, ищем по логину
-        if (user.userId == 0) {
-            user = dbService.getUserByLogin(emailOrLogin);
-            //std::cout << "🔄 Trying login lookup for: " << emailOrLogin << std::endl;
+
+        if (emailOrLogin.empty() || password.empty()) {
+            return createJsonResponse("{\"error\": \"Email and password cannot be empty\"}", 400);
         }
         
-        // ДЕБАГ: проверяем что получили
-        //std::cout << "📋 User data - ID: " << user.userId 
-                //   << ", Email: " << user.email 
-                //   << ", Login: " << user.login
-                //   << ", Hash length: " << user.passwordHash.length() << std::endl;
+        std::cout << "🔐 Login attempt: " << emailOrLogin << std::endl;
+        
+        User user = dbService.getUserByEmail(emailOrLogin);
         
         if (user.userId == 0) {
-            //std::cout << "❌ User not found: " << emailOrLogin << std::endl;
+            std::cout << "🔄 Trying login lookup for: " << emailOrLogin << std::endl;
+            user = dbService.getUserByLogin(emailOrLogin);
+        }
+        
+        if (user.userId == 0) {
+            std::cout << "❌ User not found: " << emailOrLogin << std::endl;
             return createJsonResponse("{\"error\": \"Пользователь с такими учетными данными не найден.\"}", 401);
         }
         
         std::string hashedPassword = hashPassword(password);
-        //std::cout << "🔑 Password check - Input hash: " << hashedPassword 
-                  //<< ", Stored hash: " << user.passwordHash << std::endl;
         
         if (user.passwordHash != hashedPassword) {
-            //std::cout << "❌ Password mismatch for user: " << emailOrLogin << std::endl;
+            std::cout << "❌ Password mismatch for user: " << emailOrLogin << std::endl;
             return createJsonResponse("{\"error\": \"Неверный пароль.\"}", 401);
         }
         
+        // ГЕНЕРИРУЕМ ТОКЕН
         std::string sessionToken = generateSessionToken();
-        //std::cout << "✅ Generated session token: " << sessionToken << std::endl;
+        std::cout << "✅ Generated session token, length: " << sessionToken.length() << std::endl;
         
+        // СОЗДАЕМ СЕССИЮ
+        auto now = std::chrono::system_clock::now();
         Session session;
         session.userId = std::to_string(user.userId);
         session.email = user.email;
-        session.createdAt = std::chrono::system_clock::now();
+        session.createdAt = now;
+        session.lastActivity = now;
         
         {
             std::lock_guard<std::mutex> lock(sessionsMutex);
             sessions[sessionToken] = session;
+            std::cout << "💾 Session saved, total sessions: " << sessions.size() << std::endl;
         }
         
-        json response;
-        response["message"] = "Вход выполнен успешно";
-        response["token"] = sessionToken;
-        response["user"] = {
-            {"userId", user.userId},
-            {"email", user.email},
-            {"firstName", user.firstName},
-            {"lastName", user.lastName},
-            {"login", user.login}
-        };
+        // ПРОСТОЙ И БЕЗОПАСНЫЙ JSON ОТВЕТ
+        std::string response_json = 
+            "{\"message\":\"Вход успешно выполнен!\","
+            "\"token\":\"" + sessionToken + "\","
+            "\"user\":{"
+            "\"userId\":" + std::to_string(user.userId) + ","
+            "\"email\":\"" + user.email + "\","
+            "\"firstName\":\"" + (user.firstName.empty() ? "" : user.firstName) + "\","
+            "\"lastName\":\"" + (user.lastName.empty() ? "" : user.lastName) + "\","
+            "\"login\":\"" + (user.login.empty() ? "" : user.login) + "\""
+            "}}";
         
-        //std::cout << "✅ Login successful for: " << emailOrLogin << std::endl;
-        return createJsonResponse(response.dump());
+        std::cout << "✅ Login successful for: " << emailOrLogin << std::endl;
+        std::cout << "📤 Response JSON length: " << response_json.length() << std::endl;
+        
+        return createJsonResponse(response_json);
         
     } catch (const std::exception& e) {
-        //std::cout << "💥 EXCEPTION in handleLogin: " << e.what() << std::endl;
+        std::cout << "💥 EXCEPTION in handleLogin: " << e.what() << std::endl;
         return createJsonResponse("{\"error\": \"Ошибка сервера при авторизации.\"}", 500);
     }
 }
+
 
 std::string ApiService::handleForgotPassword(const std::string& body) {
     try {
         json j = json::parse(body);
         std::string email = j["email"];
         
+        std::cout << "🔑 Forgot password request for: " << email << std::endl;
+        
         User user = dbService.getUserByEmail(email);
         if (user.userId == 0) {
+            std::cout << "⚠️  User not found for password reset: " << email << std::endl;
             return createJsonResponse("{\"message\": \"Если email существует, код сброса был отправлен\"}");
         }
         
@@ -203,12 +249,15 @@ std::string ApiService::handleForgotPassword(const std::string& body) {
             };
         }
         
+        std::cout << "✅ Password reset token generated for: " << email << std::endl;
+        
         json response;
         response["message"] = "Код сброса сгенерирован";
         response["resetToken"] = resetToken;
         
         return createJsonResponse(response.dump());
     } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleForgotPassword: " << e.what() << std::endl;
         return createJsonResponse("{\"error\": \"Неверный запрос.\"}", 400);
     }
 }
@@ -219,17 +268,21 @@ std::string ApiService::handleResetPassword(const std::string& body) {
         std::string resetToken = j["resetToken"];
         std::string newPassword = j["newPassword"];
         
+        std::cout << "🔑 Password reset attempt with token: " << resetToken.substr(0, 16) << "..." << std::endl;
+        
         std::string email;
         {
             std::lock_guard<std::mutex> lock(passwordResetMutex);
             auto it = passwordResetTokens.find(resetToken);
             if (it == passwordResetTokens.end()) {
+                std::cout << "❌ Invalid reset token: " << resetToken.substr(0, 16) << "..." << std::endl;
                 return createJsonResponse("{\"error\": \"Неверный или просроченный токен сброса\"}", 400);
             }
             
             auto now = std::chrono::system_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::minutes>(now - it->second.createdAt);
             if (duration.count() > 60) {
+                std::cout << "❌ Expired reset token: " << resetToken.substr(0, 16) << "..." << std::endl;
                 passwordResetTokens.erase(it);
                 return createJsonResponse("{\"error\": \"Токен сброса просрочен\"}", 400);
             }
@@ -238,26 +291,36 @@ std::string ApiService::handleResetPassword(const std::string& body) {
             passwordResetTokens.erase(it);
         }
         
+        std::cout << "✅ Valid reset token for: " << email << std::endl;
+        
         User user = dbService.getUserByEmail(email);
         if (user.userId == 0) {
+            std::cout << "❌ User not found for password reset: " << email << std::endl;
             return createJsonResponse("{\"error\": \"Пользователь не найден\"}", 404);
         }
         
         user.passwordHash = hashPassword(newPassword);
         if (dbService.updateUser(user)) {
+            std::cout << "✅ Password reset successful for: " << email << std::endl;
             return createJsonResponse("{\"message\": \"Пароль успешно сброшен\"}");
         } else {
+            std::cout << "❌ Failed to update password for: " << email << std::endl;
             return createJsonResponse("{\"error\": \"Ошибка сброса пароля\"}", 500);
         }
     } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleResetPassword: " << e.what() << std::endl;
         return createJsonResponse("{\"error\": \"Неверный запрос.\"}", 400);
     }
 }
 
 std::string ApiService::handleLogout(const std::string& sessionToken) {
+    std::cout << "🚪 Logout request, token: " << (sessionToken.empty() ? "empty" : sessionToken.substr(0, 16) + "...") << std::endl;
+    
     if (!sessionToken.empty()) {
         std::lock_guard<std::mutex> lock(sessionsMutex);
-        sessions.erase(sessionToken);
+        size_t erased = sessions.erase(sessionToken);
+        std::cout << "✅ Session removed, total sessions now: " << sessions.size() 
+                  << " (erased: " << erased << ")" << std::endl;
     }
     
     return createJsonResponse("{\"message\": \"Выход с учётной записи успешно осуществлён.\"}");

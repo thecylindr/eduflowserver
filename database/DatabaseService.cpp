@@ -316,7 +316,8 @@ User DatabaseService::getUserById(int userId) {
         return user;
     }
     
-    std::string sql = "SELECT user_id, email, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE user_id = $1";
+    // ✅ ИСПРАВЛЕНО: добавлено поле login в SELECT запрос
+    std::string sql = "SELECT user_id, email, login, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE user_id = $1";
     const char* params[1] = { std::to_string(userId).c_str() };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
@@ -333,11 +334,12 @@ User DatabaseService::getUserById(int userId) {
     
     user.userId = std::stoi(PQgetvalue(res, 0, 0));
     user.email = PQgetvalue(res, 0, 1);
-    user.phoneNumber = PQgetvalue(res, 0, 2);
-    user.passwordHash = PQgetvalue(res, 0, 3);
-    user.lastName = PQgetvalue(res, 0, 4);
-    user.firstName = PQgetvalue(res, 0, 5);
-    user.middleName = PQgetvalue(res, 0, 6);
+    user.login = PQgetvalue(res, 0, 2);  // ✅ Теперь поле login будет заполнено
+    user.phoneNumber = PQgetvalue(res, 0, 3);
+    user.passwordHash = PQgetvalue(res, 0, 4);
+    user.lastName = PQgetvalue(res, 0, 5);
+    user.firstName = PQgetvalue(res, 0, 6);
+    user.middleName = PQgetvalue(res, 0, 7);
     
     PQclear(res);
     return user;

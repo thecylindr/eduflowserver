@@ -30,13 +30,13 @@ struct ApiConfig {
 
 struct User {
     int userId;
-    std::string email;
     std::string login;
-    std::string phoneNumber;
+    std::string email;
     std::string passwordHash;
-    std::string lastName;
     std::string firstName;
+    std::string lastName;
     std::string middleName;
+    std::string phoneNumber;
 };
 
 struct Teacher {
@@ -92,6 +92,7 @@ struct Session {
     std::string userId;
     std::string email;
     std::chrono::system_clock::time_point createdAt;
+    std::chrono::system_clock::time_point lastActivity;
 };
 
 struct PasswordResetToken {

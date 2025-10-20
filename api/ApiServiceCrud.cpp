@@ -1,5 +1,6 @@
 #include "api/ApiService.h"
 #include "json.hpp"
+#include <iostream>
 
 using json = nlohmann::json;
 
@@ -12,20 +13,62 @@ std::string ApiService::handleAddTeacher(const std::string& body, const std::str
         json j = json::parse(body);
         Teacher teacher;
         
-        teacher.lastName = j["last_name"];
-        teacher.firstName = j["first_name"];
-        teacher.middleName = j.value("middle_name", "");
-        teacher.experience = j["experience"];
-        teacher.specialization = j["specialization"];
-        teacher.email = j.value("email", "");
-        teacher.phoneNumber = j.value("phone_number", "");
+        // Безопасное извлечение полей с проверкой на null и наличие
+        if (j.contains("last_name") && !j["last_name"].is_null()) {
+            teacher.lastName = j["last_name"];
+        } else {
+            return createJsonResponse("{\"error\": \"Field 'last_name' is required\"}", 400);
+        }
+        
+        if (j.contains("first_name") && !j["first_name"].is_null()) {
+            teacher.firstName = j["first_name"];
+        } else {
+            return createJsonResponse("{\"error\": \"Field 'first_name' is required\"}", 400);
+        }
+        
+        // Необязательные поля
+        if (j.contains("middle_name") && !j["middle_name"].is_null()) {
+            teacher.middleName = j["middle_name"];
+        } else {
+            teacher.middleName = "";
+        }
+        
+        if (j.contains("experience") && !j["experience"].is_null()) {
+            teacher.experience = j["experience"];
+        } else {
+            teacher.experience = 0; // значение по умолчанию
+        }
+        
+        if (j.contains("specialization") && !j["specialization"].is_null()) {
+            teacher.specialization = j["specialization"];
+        } else {
+            return createJsonResponse("{\"error\": \"Field 'specialization' is required\"}", 400);
+        }
+        
+        if (j.contains("email") && !j["email"].is_null()) {
+            teacher.email = j["email"];
+        } else {
+            teacher.email = "";
+        }
+        
+        if (j.contains("phone_number") && !j["phone_number"].is_null()) {
+            teacher.phoneNumber = j["phone_number"];
+        } else {
+            teacher.phoneNumber = "";
+        }
+        
+        std::cout << "👨‍🏫 Adding teacher: " << teacher.firstName << " " << teacher.lastName << std::endl;
+        std::cout << "📊 Experience: " << teacher.experience << ", Specialization: " << teacher.specialization << std::endl;
         
         if (dbService.addTeacher(teacher)) {
+            std::cout << "✅ Teacher added successfully" << std::endl;
             return createJsonResponse("{\"message\": \"Teacher added successfully\"}", 201);
         } else {
+            std::cout << "❌ Failed to add teacher" << std::endl;
             return createJsonResponse("{\"error\": \"Failed to add teacher\"}", 500);
         }
     } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleAddTeacher: " << e.what() << std::endl;
         return createJsonResponse("{\"error\": \"Invalid request format: " + std::string(e.what()) + "\"}", 400);
     }
 }
@@ -40,8 +83,11 @@ std::string ApiService::handleUpdateTeacher(const std::string& body, int teacher
         Teacher teacher = dbService.getTeacherById(teacherId);
         
         if (teacher.teacherId == 0) {
+            std::cout << "❌ Teacher not found: " << teacherId << std::endl;
             return createJsonResponse("{\"error\": \"Teacher not found\"}", 404);
         }
+        
+        std::cout << "👨‍🏫 Updating teacher ID: " << teacherId << std::endl;
         
         if (j.contains("last_name")) teacher.lastName = j["last_name"];
         if (j.contains("first_name")) teacher.firstName = j["first_name"];
@@ -52,11 +98,14 @@ std::string ApiService::handleUpdateTeacher(const std::string& body, int teacher
         if (j.contains("phone_number")) teacher.phoneNumber = j["phone_number"];
         
         if (dbService.updateTeacher(teacher)) {
+            std::cout << "✅ Teacher updated successfully" << std::endl;
             return createJsonResponse("{\"message\": \"Teacher updated successfully\"}");
         } else {
+            std::cout << "❌ Failed to update teacher" << std::endl;
             return createJsonResponse("{\"error\": \"Failed to update teacher\"}", 500);
         }
     } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleUpdateTeacher: " << e.what() << std::endl;
         return createJsonResponse("{\"error\": \"Invalid request format\"}", 400);
     }
 }
@@ -66,9 +115,13 @@ std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& se
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
     
+    std::cout << "👨‍🏫 Deleting teacher ID: " << teacherId << std::endl;
+    
     if (dbService.deleteTeacher(teacherId)) {
+        std::cout << "✅ Teacher deleted successfully" << std::endl;
         return createJsonResponse("{\"message\": \"Teacher deleted successfully\"}");
     } else {
+        std::cout << "❌ Failed to delete teacher" << std::endl;
         return createJsonResponse("{\"error\": \"Failed to delete teacher\"}", 500);
     }
 }

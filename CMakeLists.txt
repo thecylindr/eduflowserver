@@ -230,6 +230,13 @@ else()
     message(FATAL_ERROR "Missing required file: api/ApiServiceGetters.cpp")
 endif()
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceSessions.cpp")
+    list(APPEND SOURCES "api/ApiServiceSessions.cpp")
+    message(STATUS "Found: api/ApiServiceSessions.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceSessions.cpp")
+endif()
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceCrud.cpp")
     list(APPEND SOURCES "api/ApiServiceCrud.cpp")
     message(STATUS "Found: api/ApiServiceCrud.cpp")

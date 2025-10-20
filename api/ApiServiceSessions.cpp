@@ -1,0 +1,129 @@
+#include "api/ApiService.h"
+#include "json.hpp"
+#include <fstream>
+#include <iostream>
+
+using json = nlohmann::json;
+
+// Сериализация сессий в JSON
+void ApiService::saveSessionsToFile() {
+    std::lock_guard<std::mutex> lock(sessionsMutex);
+    
+    json sessionsJson;
+    for (const auto& [token, session] : sessions) {
+        json sessionJson;
+        sessionJson["userId"] = session.userId;
+        sessionJson["email"] = session.email;
+        sessionJson["createdAt"] = std::chrono::duration_cast<std::chrono::seconds>(
+            session.createdAt.time_since_epoch()).count();
+        sessionJson["lastActivity"] = std::chrono::duration_cast<std::chrono::seconds>(
+            session.lastActivity.time_since_epoch()).count();
+        
+        sessionsJson[token] = sessionJson;
+    }
+    
+    std::ofstream file("sessions.json");
+    if (file.is_open()) {
+        file << sessionsJson.dump(4);
+        file.close();
+        std::cout << "💾 Sessions saved to file: " << sessions.size() << " sessions" << std::endl;
+    } else {
+        std::cout << "❌ Failed to save sessions to file" << std::endl;
+    }
+}
+
+// Загрузка сессий из файла
+void ApiService::loadSessionsFromFile() {
+    std::lock_guard<std::mutex> lock(sessionsMutex);
+    
+    std::ifstream file("sessions.json");
+    if (!file.is_open()) {
+        std::cout << "📝 No existing sessions file found" << std::endl;
+        return;
+    }
+    
+    try {
+        json sessionsJson;
+        file >> sessionsJson;
+        file.close();
+        
+        auto now = std::chrono::system_clock::now();
+        size_t loadedCount = 0;
+        
+        for (auto& [token, sessionJson] : sessionsJson.items()) {
+            Session session;
+            session.userId = sessionJson["userId"];
+            session.email = sessionJson["email"];
+            
+            auto createdAtSeconds = std::chrono::seconds(sessionJson["createdAt"]);
+            session.createdAt = std::chrono::system_clock::time_point(createdAtSeconds);
+            
+            auto lastActivitySeconds = std::chrono::seconds(sessionJson["lastActivity"]);
+            session.lastActivity = std::chrono::system_clock::time_point(lastActivitySeconds);
+            
+            // ИСПРАВЛЕНИЕ: Проверяем по последней активности, а не по созданию
+            auto duration = std::chrono::duration_cast<std::chrono::hours>(now - session.lastActivity);
+            if (duration.count() <= apiConfig.sessionTimeoutHours) {
+                sessions[token] = session;
+                loadedCount++;
+            } else {
+                // Сессия истекла, не загружаем
+            }
+        }
+        
+        std::cout << "📥 Sessions loaded from file: " << loadedCount << " valid sessions" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cout << "❌ Error loading sessions: " << e.what() << std::endl;
+    }
+}
+
+// Очистка устаревших сессий
+void ApiService::cleanupExpiredSessions() {
+    std::lock_guard<std::mutex> lock(sessionsMutex);
+    
+    auto now = std::chrono::system_clock::now();
+    size_t initialSize = sessions.size();
+    
+    auto it = sessions.begin();
+    while (it != sessions.end()) {
+        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - it->second.lastActivity);
+        if (duration.count() > apiConfig.sessionTimeoutHours) {
+            it = sessions.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    
+    if (initialSize != sessions.size()) {
+        std::cout << "🧹 Cleaned up " << (initialSize - sessions.size()) 
+                  << " expired sessions, remaining: " << sessions.size() << std::endl;
+    }
+}
+
+// Получение информации о сессии
+std::string ApiService::getSessionInfo(const std::string& sessionToken) {
+    std::lock_guard<std::mutex> lock(sessionsMutex);
+    
+    auto it = sessions.find(sessionToken);
+    if (it == sessions.end()) {
+        return "{\"error\": \"Invalid session\"}";
+    }
+    
+    auto now = std::chrono::system_clock::now();
+    auto age = std::chrono::duration_cast<std::chrono::hours>(now - it->second.createdAt);
+    auto inactive = std::chrono::duration_cast<std::chrono::minutes>(now - it->second.lastActivity);
+    
+    // РУЧНОЕ ФОРМИРОВАНИЕ JSON БЕЗ БИБЛИОТЕКИ
+    std::stringstream ss;
+    ss << "{"
+       << "\"userId\":\"" << it->second.userId << "\","
+       << "\"email\":\"" << it->second.email << "\","
+       << "\"ageHours\":" << age.count() << ","
+       << "\"inactiveMinutes\":" << inactive.count() << ","
+       << "\"timeoutHours\":" << apiConfig.sessionTimeoutHours << ","
+       << "\"remainingHours\":" << (apiConfig.sessionTimeoutHours - age.count())
+       << "}";
+    
+    return ss.str();
+}
