@@ -84,6 +84,9 @@ public:
     
     // Password hashing
     std::string hashPassword(const std::string& password);
+
+
+    std::string handleAddSpecialization(const std::string& body, const std::string& sessionToken);
     
     // CRUD operations
     std::string handleAddTeacher(const std::string& body, const std::string& sessionToken);

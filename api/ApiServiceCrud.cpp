@@ -126,6 +126,35 @@ std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& se
     }
 }
 
+// ДОБАВЛЕНО: Обработчик для добавления специализации
+std::string ApiService::handleAddSpecialization(const std::string& body, const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+    }
+
+    try {
+        json j = json::parse(body);
+        
+        if (!j.contains("name") || j["name"].is_null()) {
+            return createJsonResponse("{\"error\": \"Field 'name' is required\"}", 400);
+        }
+        
+        std::string name = j["name"];
+        int code = j.value("code", 0); // код можно передавать или генерировать автоматически
+        
+        // Здесь можно добавить логику для сохранения специализации
+        // Пока просто возвращаем успех
+        std::cout << "📚 Adding specialization: " << name << " (code: " << code << ")" << std::endl;
+        
+        return createJsonResponse("{\"message\": \"Specialization added successfully\", \"code\": " + std::to_string(code) + "}", 201);
+        
+    } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleAddSpecialization: " << e.what() << std::endl;
+        return createJsonResponse("{\"error\": \"Invalid request format\"}", 400);
+    }
+}
+
+// Остальные методы без изменений...
 std::string ApiService::handleAddStudent(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);

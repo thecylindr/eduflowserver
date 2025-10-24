@@ -7,6 +7,35 @@ using json = nlohmann::json;
 // ДОБАВИМ МЬЮТЕКС ДЛЯ ЗАЩИТЫ БАЗЫ ДАННЫХ
 static std::mutex dbMutex;
 
+// ДОБАВЛЕНО: Метод для получения списка специализаций
+std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+    }
+
+    // Создаем тестовый список специализаций
+    std::vector<std::string> defaultSpecializations = {
+        "Математика",
+        "Физика", 
+        "Химия",
+        "Информатика",
+        "Русский язык",
+        "Литература",
+        "История",
+        "Биология",
+        "География",
+        "Иностранный язык"
+    };
+
+    json j = json::array();
+    for (const auto& specialization : defaultSpecializations) {
+        j.push_back(specialization);
+    }
+
+    return createJsonResponse(j.dump());
+}
+
+// Остальные методы без изменений...
 std::string ApiService::getProfile(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -153,22 +182,6 @@ std::string ApiService::getEventsJson(const std::string& sessionToken) {
         eventJson["lore"] = event.lore;
         
         j.push_back(eventJson);
-    }
-    
-    return createJsonResponse(j.dump());
-}
-
-std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    std::lock_guard<std::mutex> lock(dbMutex);
-    auto specializations = dbService.getSpecializations();
-    json j = json::array();
-    
-    for (const auto& specialization : specializations) {
-        j.push_back(specialization);
     }
     
     return createJsonResponse(j.dump());

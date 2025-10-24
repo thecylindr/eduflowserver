@@ -69,6 +69,7 @@ bool DatabaseService::setupDatabase() {
         "phone_number VARCHAR(20))",
 
         "CREATE TABLE IF NOT EXISTS specialization_list ("
+        "id SERIAL PRIMARY KEY,"
         "specialization INTEGER REFERENCES teachers(specialization),"
         "name VARCHAR(80) NOT NULL)",
         

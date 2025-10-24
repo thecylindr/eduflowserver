@@ -408,6 +408,20 @@ std::string ApiService::processRequest(const std::string& method, const std::str
             } else {
                 return handleAddStudent(body, sessionToken);
             }
+        } else if (method == "GET" && path == "/specializations") {
+            // ИСПРАВЛЕНИЕ: добавляем проверку авторизации и возврат значения
+            if (!validateSession(sessionToken)) {
+                return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+            } else {
+                return getSpecializationsJson(sessionToken);
+            }
+        } else if (method == "POST" && path == "/specializations") {
+            // ИСПРАВЛЕНИЕ: добавляем проверку авторизации и возврат значения
+            if (!validateSession(sessionToken)) {
+                return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+            } else {
+                return handleAddSpecialization(body, sessionToken);
+            }
         } else if (method == "PUT" && std::regex_match(path, matches, studentRegex)) {
             if (!validateSession(sessionToken)) {
                 return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -470,6 +484,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
         return createJsonResponse("{\"error\": \"Internal server error\"}", 500);
     }
 }
+
 
 std::string ApiService::createJsonResponse(const std::string& content, int statusCode) {
     std::string statusText;
