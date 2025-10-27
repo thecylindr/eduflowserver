@@ -153,6 +153,7 @@ std::string ApiService::handleUpdateTeacher(const std::string& body, int teacher
     }
 }
 
+// УДАЛЕН ДУБЛИРУЮЩИЙСЯ КОД - оставляем только одну реализацию handleDeleteTeacher
 std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -161,7 +162,7 @@ std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& se
     std::cout << "👨‍🏫 Deleting teacher ID: " << teacherId << std::endl;
     
     if (dbService.deleteTeacher(teacherId)) {
-        std::cout << "✅ Teacher deleted successfully" << std::endl;
+        std::cout << "✅ Teacher and their specializations deleted successfully" << std::endl;
         return createJsonResponse("{\"message\": \"Teacher deleted successfully\"}");
     } else {
         std::cout << "❌ Failed to delete teacher" << std::endl;

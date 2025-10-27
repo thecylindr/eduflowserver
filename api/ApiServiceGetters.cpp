@@ -49,16 +49,26 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         teacherJson["email"] = teacher.email;
         teacherJson["phone_number"] = teacher.phoneNumber;
         
-        // Добавляем специализации преподавателя
+        // Получаем специализации преподавателя
         auto specializations = dbService.getTeacherSpecializations(teacher.teacherId);
         json specArray = json::array();
+        
+        // Формируем строку специализаций для обратной совместимости
+        std::string specNames;
         for (const auto& spec : specializations) {
             json specJson;
             specJson["code"] = spec.specializationCode;
             specJson["name"] = spec.name;
             specArray.push_back(specJson);
+            
+            if (!specNames.empty()) {
+                specNames += ", ";
+            }
+            specNames += spec.name;
         }
+        
         teacherJson["specializations"] = specArray;
+        teacherJson["specialization"] = specNames; // Для обратной совместимости
         
         teachersArray.push_back(teacherJson);
     }

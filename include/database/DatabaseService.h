@@ -31,6 +31,7 @@ public:
     bool addTeacher(const Teacher& teacher);
     bool updateTeacher(const Teacher& teacher);
     bool deleteTeacher(int teacherId);
+    bool removeAllTeacherSpecializations(int teacherId);
     Teacher getTeacherById(int teacherId);
     
     // Student management
