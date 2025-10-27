@@ -5,7 +5,7 @@
 #include "models/Models.h"
 #include <vector>
 #include <string>
-#include <libpq-fe.h>  // Добавьте этот заголовок
+#include <libpq-fe.h>
 
 class DatabaseService {
 public:
@@ -55,9 +55,16 @@ public:
     std::vector<Event> getEvents();
     bool addEvent(const Event& event);
     
-    // Specializations
-    std::vector<std::string> getSpecializations();
-
+    // Specializations management - ИСПРАВЛЕННЫЕ ОБЪЯВЛЕНИЯ
+    std::vector<Specialization> getSpecializations();
+    bool addSpecialization(const Specialization& specialization);
+    bool deleteSpecialization(int specializationCode);
+    
+    // Teacher specializations management - ИСПРАВЛЕННЫЕ ОБЪЯВЛЕНИЯ
+    bool addTeacherSpecialization(int teacherId, int specializationCode);
+    bool removeTeacherSpecialization(int teacherId, int specializationCode);
+    std::vector<Specialization> getTeacherSpecializations(int teacherId);
+    
     // Get current config
     DatabaseConfig getCurrentConfig() const { return currentConfig; }
 

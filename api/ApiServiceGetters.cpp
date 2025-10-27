@@ -4,34 +4,90 @@
 
 using json = nlohmann::json;
 
-// ДОБАВИМ МЬЮТЕКС ДЛЯ ЗАЩИТЫ БАЗЫ ДАННЫХ
 static std::mutex dbMutex;
 
-// ДОБАВЛЕНО: Метод для получения списка специализаций
+// Получение списка специализаций с кодами
 std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
     }
 
-    // Создаем тестовый список специализаций
-    std::vector<std::string> defaultSpecializations = {
-        "Математика",
-        "Физика", 
-        "Химия",
-        "Информатика",
-        "Русский язык",
-        "Литература",
-        "История",
-        "Биология",
-        "География",
-        "Иностранный язык"
-    };
-
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto specializations = dbService.getSpecializations();
     json j = json::array();
-    for (const auto& specialization : defaultSpecializations) {
-        j.push_back(specialization);
+    
+    for (const auto& specialization : specializations) {
+        json specJson;
+        specJson["code"] = specialization.specializationCode;
+        specJson["name"] = specialization.name;
+        j.push_back(specJson);
     }
 
+    return createJsonResponse(j.dump());
+}
+
+// Получение преподавателей со специализациями
+std::string ApiService::getTeachersJson(const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto teachers = dbService.getTeachers();
+    json teachersArray = json::array();
+    
+    for (auto& teacher : teachers) {
+        json teacherJson;
+        teacherJson["teacher_id"] = teacher.teacherId;
+        teacherJson["last_name"] = teacher.lastName;
+        teacherJson["first_name"] = teacher.firstName;
+        teacherJson["middle_name"] = teacher.middleName;
+        teacherJson["experience"] = teacher.experience;
+        teacherJson["email"] = teacher.email;
+        teacherJson["phone_number"] = teacher.phoneNumber;
+        
+        // Добавляем специализации преподавателя
+        auto specializations = dbService.getTeacherSpecializations(teacher.teacherId);
+        json specArray = json::array();
+        for (const auto& spec : specializations) {
+            json specJson;
+            specJson["code"] = spec.specializationCode;
+            specJson["name"] = spec.name;
+            specArray.push_back(specJson);
+        }
+        teacherJson["specializations"] = specArray;
+        
+        teachersArray.push_back(teacherJson);
+    }
+    
+    // Единый формат ответа
+    json response;
+    response["success"] = true;
+    response["data"] = teachersArray;
+    
+    return createJsonResponse(response.dump());
+}
+
+// Получение специализаций конкретного преподавателя
+std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+    }
+    
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto specializations = dbService.getTeacherSpecializations(teacherId);
+    json j = json::array();
+    
+    for (const auto& spec : specializations) {
+        json specJson;
+        specJson["code"] = spec.specializationCode;
+        specJson["name"] = spec.name;
+        j.push_back(specJson);
+    }
+    
     return createJsonResponse(j.dump());
 }
 
@@ -61,32 +117,6 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
     userJson["phoneNumber"] = user.phoneNumber;
     
     return createJsonResponse(userJson.dump());
-}
-
-std::string ApiService::getTeachersJson(const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
-    }
-    
-    std::lock_guard<std::mutex> lock(dbMutex);
-    auto teachers = dbService.getTeachers();
-    json j = json::array();
-    
-    for (const auto& teacher : teachers) {
-        json teacherJson;
-        teacherJson["teacherId"] = teacher.teacherId;
-        teacherJson["lastName"] = teacher.lastName;
-        teacherJson["firstName"] = teacher.firstName;
-        teacherJson["middleName"] = teacher.middleName;
-        teacherJson["experience"] = teacher.experience;
-        teacherJson["specialization"] = teacher.specialization;
-        teacherJson["email"] = teacher.email;
-        teacherJson["phoneNumber"] = teacher.phoneNumber;
-        
-        j.push_back(teacherJson);
-    }
-    
-    return createJsonResponse(j.dump());
 }
 
 std::string ApiService::getStudentsJson(const std::string& sessionToken) {

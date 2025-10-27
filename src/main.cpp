@@ -342,31 +342,191 @@ private:
 
     // Управление преподавателями
     void manageTeachers() {
-        clearScreen();
-        drawHeader(tr("teachers_manage_title"));
-
-        auto teachers = dbService.getTeachers();
-        
-        std::cout << Colors::MAGENTA << "📊 " << tr("total_teachers") << ": " << Colors::YELLOW << teachers.size() << Colors::RESET << std::endl;
-        std::cout << std::endl;
-        
-        if (!teachers.empty()) {
-            for (const auto& teacher : teachers) {
-                std::cout << Colors::CYAN << "👨‍🏫 " << tr("teacher") << " " << teacher.teacherId << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   📍 " << tr("last_name") << ": " << Colors::WHITE << teacher.lastName << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   📍 " << tr("first_name") << ": " << Colors::WHITE << teacher.firstName << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   📍 " << tr("middle_name") << ": " << Colors::WHITE << teacher.middleName << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   ⏱️  " << tr("experience") << ": " << Colors::WHITE << teacher.experience << Colors::RESET << " " << tr("years") << std::endl;
-                std::cout << Colors::CYAN << "   🎯 " << tr("specialization") << ": " << Colors::WHITE << teacher.specialization << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   ✉️  " << tr("email") << ": " << Colors::WHITE << teacher.email << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   📞 " << tr("phone") << ": " << Colors::WHITE << teacher.phoneNumber << Colors::RESET << std::endl;
-                std::cout << std::endl;
+        while (true) {
+            std::cout << Colors::YELLOW << "\n👨‍🏫 " << tr("teacher_management") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "1. " << tr("view_teachers") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "2. " << tr("add_teacher") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "3. " << tr("edit_teacher") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "4. " << tr("delete_teacher") << Colors::RESET << std::endl;
+            std::cout << Colors::RED << "5. " << tr("back") << Colors::RESET << std::endl;
+            
+            std::cout << Colors::GREEN << "\n➡️ " << tr("enter_choice") << ": " << Colors::RESET;
+            std::string choice;
+            std::getline(std::cin, choice);
+            
+            if (choice == "1") {
+                // Просмотр преподавателей
+                auto teachers = dbService.getTeachers();
+                std::cout << Colors::YELLOW << "\n📋 " << tr("teachers_list") << " (" << teachers.size() << "):" << Colors::RESET << std::endl;
+                
+                for (const auto& teacher : teachers) {
+                    std::cout << Colors::GREEN << "👨‍🏫 " << teacher.lastName << " " << teacher.firstName << " " << teacher.middleName << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   🆔 " << tr("id") << ": " << Colors::WHITE << teacher.teacherId << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   📧 " << tr("email") << ": " << Colors::WHITE << teacher.email << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   📞 " << tr("phone") << ": " << Colors::WHITE << teacher.phoneNumber << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   📊 " << tr("experience") << ": " << Colors::WHITE << teacher.experience << " " << tr("years") << Colors::RESET << std::endl;
+                    
+                    // Исправленный вывод специализаций
+                    std::cout << Colors::CYAN << "   🎯 " << tr("specializations") << ": " << Colors::WHITE;
+                    auto specializations = dbService.getTeacherSpecializations(teacher.teacherId);
+                    if (specializations.empty()) {
+                        std::cout << tr("none");
+                    } else {
+                        for (size_t i = 0; i < specializations.size(); ++i) {
+                            std::cout << specializations[i].name; // Теперь это Specialization, а не string
+                            if (i < specializations.size() - 1) {
+                                std::cout << ", ";
+                            }
+                        }
+                    }
+                    std::cout << Colors::RESET << std::endl;
+                    std::cout << std::endl;
+                }
+                
+            } else if (choice == "2") {
+                // Добавление преподавателя
+                std::cout << Colors::YELLOW << "\n➕ " << tr("add_teacher") << Colors::RESET << std::endl;
+                
+                Teacher teacher;
+                std::cout << Colors::GREEN << tr("enter_last_name") << ": " << Colors::RESET;
+                std::getline(std::cin, teacher.lastName);
+                
+                std::cout << Colors::GREEN << tr("enter_first_name") << ": " << Colors::RESET;
+                std::getline(std::cin, teacher.firstName);
+                
+                std::cout << Colors::GREEN << tr("enter_middle_name") << ": " << Colors::RESET;
+                std::getline(std::cin, teacher.middleName);
+                
+                std::cout << Colors::GREEN << tr("enter_experience") << ": " << Colors::RESET;
+                std::string expStr;
+                std::getline(std::cin, expStr);
+                teacher.experience = expStr.empty() ? 0 : std::stoi(expStr);
+                
+                std::cout << Colors::GREEN << tr("enter_email") << ": " << Colors::RESET;
+                std::getline(std::cin, teacher.email);
+                
+                std::cout << Colors::GREEN << tr("enter_phone") << ": " << Colors::RESET;
+                std::getline(std::cin, teacher.phoneNumber);
+                
+                if (dbService.addTeacher(teacher)) {
+                    std::cout << Colors::GREEN << "✅ " << tr("teacher_added_success") << Colors::RESET << std::endl;
+                    
+                    // Предложение добавить специализации
+                    std::cout << Colors::CYAN << tr("add_specializations_prompt") << " (y/n): " << Colors::RESET;
+                    std::string addSpecs;
+                    std::getline(std::cin, addSpecs);
+                    
+                    if (addSpecs == "y" || addSpecs == "Y") {
+                        auto allSpecs = dbService.getSpecializations();
+                        if (!allSpecs.empty()) {
+                            std::cout << Colors::YELLOW << "\n📚 " << tr("available_specializations") << ":" << Colors::RESET << std::endl;
+                            for (const auto& spec : allSpecs) {
+                                std::cout << Colors::CYAN << "   " << spec.specializationCode << ". " << spec.name << Colors::RESET << std::endl;
+                            }
+                            
+                            std::cout << Colors::GREEN << tr("enter_specialization_codes") << " (comma-separated): " << Colors::RESET;
+                            std::string codesInput;
+                            std::getline(std::cin, codesInput);
+                            
+                            // Парсим коды специализаций
+                            std::stringstream ss(codesInput);
+                            std::string codeStr;
+                            while (std::getline(ss, codeStr, ',')) {
+                                if (!codeStr.empty()) {
+                                    try {
+                                        int code = std::stoi(codeStr);
+                                        dbService.addTeacherSpecialization(teacher.teacherId, code);
+                                    } catch (const std::exception& e) {
+                                        std::cout << Colors::RED << "❌ " << tr("invalid_code") << ": " << codeStr << Colors::RESET << std::endl;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    std::cout << Colors::RED << "❌ " << tr("teacher_add_failed") << Colors::RESET << std::endl;
+                }
+                
+            } else if (choice == "3") {
+                // Редактирование преподавателя
+                std::cout << Colors::YELLOW << "\n✏️ " << tr("edit_teacher") << Colors::RESET << std::endl;
+                std::cout << Colors::GREEN << tr("enter_teacher_id") << ": " << Colors::RESET;
+                std::string idStr;
+                std::getline(std::cin, idStr);
+                
+                int teacherId = std::stoi(idStr);
+                Teacher teacher = dbService.getTeacherById(teacherId);
+                
+                if (teacher.teacherId == 0) {
+                    std::cout << Colors::RED << "❌ " << tr("teacher_not_found") << Colors::RESET << std::endl;
+                    continue;
+                }
+                
+                std::cout << Colors::CYAN << tr("editing_teacher") << ": " << teacher.lastName << " " << teacher.firstName << Colors::RESET << std::endl;
+                
+                std::cout << Colors::GREEN << tr("enter_last_name") << " (" << teacher.lastName << "): " << Colors::RESET;
+                std::string lastName;
+                std::getline(std::cin, lastName);
+                if (!lastName.empty()) teacher.lastName = lastName;
+                
+                std::cout << Colors::GREEN << tr("enter_first_name") << " (" << teacher.firstName << "): " << Colors::RESET;
+                std::string firstName;
+                std::getline(std::cin, firstName);
+                if (!firstName.empty()) teacher.firstName = firstName;
+                
+                std::cout << Colors::GREEN << tr("enter_middle_name") << " (" << teacher.middleName << "): " << Colors::RESET;
+                std::string middleName;
+                std::getline(std::cin, middleName);
+                if (!middleName.empty()) teacher.middleName = middleName;
+                
+                std::cout << Colors::GREEN << tr("enter_experience") << " (" << teacher.experience << "): " << Colors::RESET;
+                std::string expStr;
+                std::getline(std::cin, expStr);
+                if (!expStr.empty()) teacher.experience = std::stoi(expStr);
+                
+                std::cout << Colors::GREEN << tr("enter_email") << " (" << teacher.email << "): " << Colors::RESET;
+                std::string email;
+                std::getline(std::cin, email);
+                if (!email.empty()) teacher.email = email;
+                
+                std::cout << Colors::GREEN << tr("enter_phone") << " (" << teacher.phoneNumber << "): " << Colors::RESET;
+                std::string phone;
+                std::getline(std::cin, phone);
+                if (!phone.empty()) teacher.phoneNumber = phone;
+                
+                if (dbService.updateTeacher(teacher)) {
+                    std::cout << Colors::GREEN << "✅ " << tr("teacher_updated_success") << Colors::RESET << std::endl;
+                } else {
+                    std::cout << Colors::RED << "❌ " << tr("teacher_update_failed") << Colors::RESET << std::endl;
+                }
+                
+            } else if (choice == "4") {
+                // Удаление преподавателя
+                std::cout << Colors::YELLOW << "\n🗑️ " << tr("delete_teacher") << Colors::RESET << std::endl;
+                std::cout << Colors::GREEN << tr("enter_teacher_id") << ": " << Colors::RESET;
+                std::string idStr;
+                std::getline(std::cin, idStr);
+                
+                int teacherId = std::stoi(idStr);
+                
+                std::cout << Colors::RED << tr("confirm_delete") << " (y/n): " << Colors::RESET;
+                std::string confirm;
+                std::getline(std::cin, confirm);
+                
+                if (confirm == "y" || confirm == "Y") {
+                    if (dbService.deleteTeacher(teacherId)) {
+                        std::cout << Colors::GREEN << "✅ " << tr("teacher_deleted_success") << Colors::RESET << std::endl;
+                    } else {
+                        std::cout << Colors::RED << "❌ " << tr("teacher_delete_failed") << Colors::RESET << std::endl;
+                    }
+                }
+                
+            } else if (choice == "5") {
+                break;
+            } else {
+                std::cout << Colors::RED << "❌ " << tr("invalid_choice") << Colors::RESET << std::endl;
             }
-        } else {
-            showWarning(tr("no_teachers"));
         }
-
-        waitForEnter();
     }
 
     // Управление группами

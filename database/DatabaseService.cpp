@@ -64,7 +64,7 @@ bool DatabaseService::setupDatabase() {
         "first_name VARCHAR(100) NOT NULL,"
         "middle_name VARCHAR(100),"
         "experience INTEGER NOT NULL,"
-        "specialization INTEGER NOT NULL UNIQUE,"
+        "specialization SERIAL UNIQUE,"
         "email VARCHAR(100),"
         "phone_number VARCHAR(20))",
 
@@ -96,7 +96,7 @@ bool DatabaseService::setupDatabase() {
         "measure_code INTEGER NOT NULL UNIQUE,"
         "date DATE NOT NULL,"
         "decree INTEGER NOT NULL)",
-
+        
         "CREATE TABLE IF NOT EXISTS event ("
         "event_id INTEGER REFERENCES student_portfolio(measure_code),"
         "event_category VARCHAR(48) NOT NULL UNIQUE,"
@@ -105,11 +105,11 @@ bool DatabaseService::setupDatabase() {
         "end_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
         "location VARCHAR(48),"
         "lore TEXT)",
-
+        
         "CREATE TABLE IF NOT EXISTS event_category ("
         "event_type VARCHAR(48) REFERENCES event(event_category),"
         "category VARCHAR(48))",
-
+        
         "CREATE TABLE IF NOT EXISTS users ("
         "user_id SERIAL PRIMARY KEY,"
         "email VARCHAR(100) UNIQUE NOT NULL,"
@@ -317,7 +317,6 @@ User DatabaseService::getUserById(int userId) {
         return user;
     }
     
-    // ✅ ИСПРАВЛЕНО: добавлено поле login в SELECT запрос
     std::string sql = "SELECT user_id, email, login, phone_number, password_hash, last_name, first_name, middle_name FROM users WHERE user_id = $1";
     const char* params[1] = { std::to_string(userId).c_str() };
     
@@ -335,7 +334,7 @@ User DatabaseService::getUserById(int userId) {
     
     user.userId = std::stoi(PQgetvalue(res, 0, 0));
     user.email = PQgetvalue(res, 0, 1);
-    user.login = PQgetvalue(res, 0, 2);  // ✅ Теперь поле login будет заполнено
+    user.login = PQgetvalue(res, 0, 2);
     user.phoneNumber = PQgetvalue(res, 0, 3);
     user.passwordHash = PQgetvalue(res, 0, 4);
     user.lastName = PQgetvalue(res, 0, 5);
@@ -344,38 +343,6 @@ User DatabaseService::getUserById(int userId) {
     
     PQclear(res);
     return user;
-}
-
-std::vector<Teacher> DatabaseService::getTeachers() {
-    std::vector<Teacher> teachers;
-    
-    configManager.loadConfig(currentConfig);
-    
-    if (!connection && !connect(currentConfig)) return teachers;
-    
-    PGresult* res = PQexec(connection, "SELECT * FROM teachers");
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        PQclear(res);
-        return teachers;
-    }
-    
-    int rows = PQntuples(res);
-    for (int i = 0; i < rows; i++) {
-        Teacher teacher;
-        teacher.teacherId = std::stoi(PQgetvalue(res, i, 0));
-        teacher.lastName = PQgetvalue(res, i, 1);
-        teacher.firstName = PQgetvalue(res, i, 2);
-        teacher.middleName = PQgetvalue(res, i, 3);
-        teacher.experience = std::stoi(PQgetvalue(res, i, 4));
-        teacher.specialization = PQgetvalue(res, i, 5);
-        teacher.email = PQgetvalue(res, i, 6);
-        teacher.phoneNumber = PQgetvalue(res, i, 7);
-        
-        teachers.push_back(teacher);
-    }
-    
-    PQclear(res);
-    return teachers;
 }
 
 std::vector<StudentGroup> DatabaseService::getGroups() {
@@ -432,6 +399,26 @@ bool DatabaseService::addStudent(const Student& student) {
     return success;
 }
 
+bool DatabaseService::addTeacherSpecialization(int teacherId, int specializationCode) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "INSERT INTO teacher_specializations (teacher_id, specialization_code) VALUES ($1, $2)";
+    const char* params[2] = {
+        std::to_string(teacherId).c_str(),
+        std::to_string(specializationCode).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
 bool DatabaseService::addTeacher(const Teacher& teacher) {
     configManager.loadConfig(currentConfig);
     
@@ -439,22 +426,97 @@ bool DatabaseService::addTeacher(const Teacher& teacher) {
         return false;
     }
     
-    std::string sql = "INSERT INTO teachers (last_name, first_name, middle_name, experience, specialization, email, phone_number) VALUES ($1, $2, $3, $4, $5, $6, $7)";
-    const char* params[7] = {
+    // specialization теперь SERIAL - не передаём его, БД сама сгенерирует
+    std::string sql = "INSERT INTO teachers (last_name, first_name, middle_name, experience, email, phone_number) VALUES ($1, $2, $3, $4, $5, $6) RETURNING teacher_id, specialization";
+    const char* params[6] = {
         teacher.lastName.c_str(),
         teacher.firstName.c_str(),
         teacher.middleName.c_str(),
         std::to_string(teacher.experience).c_str(),
-        teacher.specialization.c_str(),
         teacher.email.c_str(),
         teacher.phoneNumber.c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
+    
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Database error in addTeacher: " << PQerrorMessage(connection) << std::endl;
+        PQclear(res);
+        return false;
+    }
+    
+    // Получаем ID преподавателя и сгенерированный код специализации
+    int teacherId = std::stoi(PQgetvalue(res, 0, 0));
+    int specializationCode = std::stoi(PQgetvalue(res, 0, 1));
     PQclear(res);
     
-    return success;
+    std::cout << "✅ Teacher added with ID: " << teacherId << ", specialization code: " << specializationCode << std::endl;
+    
+    // Теперь добавляем специализации в specialization_list
+    if (!teacher.specializations.empty()) {
+        for (const auto& spec : teacher.specializations) {
+            std::string specSql = "INSERT INTO specialization_list (specialization, name) VALUES ($1, $2)";
+            const char* specParams[2] = {
+                std::to_string(specializationCode).c_str(),  // используем сгенерированный код
+                spec.name.c_str()
+            };
+            
+            PGresult* specRes = PQexecParams(connection, specSql.c_str(), 2, NULL, specParams, NULL, NULL, 0);
+            if (PQresultStatus(specRes) != PGRES_COMMAND_OK) {
+                std::cerr << "Warning: Failed to add specialization: " << PQerrorMessage(connection) << std::endl;
+            } else {
+                std::cout << "✅ Added specialization: " << spec.name << " with code: " << specializationCode << std::endl;
+            }
+            PQclear(specRes);
+        }
+    }
+    
+    return true;
+}
+
+std::vector<Teacher> DatabaseService::getTeachers() {
+    std::vector<Teacher> teachers;
+    
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) return teachers;
+    
+    // Используем JOIN чтобы получить специализации
+    std::string sql = "SELECT t.teacher_id, t.last_name, t.first_name, t.middle_name, t.experience, t.email, t.phone_number, "
+                     "STRING_AGG(sl.name, ', ') as specializations "
+                     "FROM teachers t "
+                     "LEFT JOIN specialization_list sl ON t.specialization = sl.specialization "
+                     "GROUP BY t.teacher_id, t.last_name, t.first_name, t.middle_name, t.experience, t.email, t.phone_number";
+    
+    PGresult* res = PQexec(connection, sql.c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return teachers;
+    }
+    
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        Teacher teacher;
+        teacher.teacherId = std::stoi(PQgetvalue(res, i, 0));
+        teacher.lastName = PQgetvalue(res, i, 1);
+        teacher.firstName = PQgetvalue(res, i, 2);
+        teacher.middleName = PQgetvalue(res, i, 3);
+        teacher.experience = std::stoi(PQgetvalue(res, i, 4));
+        teacher.email = PQgetvalue(res, i, 5);
+        teacher.phoneNumber = PQgetvalue(res, i, 6);
+        
+        // Получаем специализации как строку
+        if (!PQgetisnull(res, i, 7)) {
+            teacher.specialization = PQgetvalue(res, i, 7);
+        } else {
+            teacher.specialization = "";
+        }
+        
+        teachers.push_back(teacher);
+    }
+    
+    PQclear(res);
+    return teachers;
 }
 
 bool DatabaseService::addGroup(const StudentGroup& group) {
@@ -866,15 +928,52 @@ bool DatabaseService::addEvent(const Event& event) {
     return success;
 }
 
-std::vector<std::string> DatabaseService::getSpecializations() {
-    std::vector<std::string> specializations;
+bool DatabaseService::addSpecialization(const Specialization& specialization) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "INSERT INTO specialization_list (specialization, name) VALUES ($1, $2)";
+    const char* params[2] = {
+        std::to_string(specialization.specializationCode).c_str(),
+        specialization.name.c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+bool DatabaseService::deleteSpecialization(int specializationCode) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM specialization_list WHERE specialization = $1";
+    const char* params[1] = { std::to_string(specializationCode).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
+}
+
+std::vector<Specialization> DatabaseService::getSpecializations() {
+    std::vector<Specialization> specializations;
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return specializations;
     }
     
-    PGresult* res = PQexec(connection, "SELECT name FROM specialization_list");
+    PGresult* res = PQexec(connection, "SELECT specialization, name FROM specialization_list ORDER BY name");
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
         PQclear(res);
         return specializations;
@@ -882,9 +981,60 @@ std::vector<std::string> DatabaseService::getSpecializations() {
     
     int rows = PQntuples(res);
     for (int i = 0; i < rows; i++) {
-        specializations.push_back(PQgetvalue(res, i, 0));
+        Specialization spec;
+        spec.specializationCode = std::stoi(PQgetvalue(res, i, 0));
+        spec.name = PQgetvalue(res, i, 1);
+        specializations.push_back(spec);
     }
     
     PQclear(res);
     return specializations;
+}
+
+std::vector<Specialization> DatabaseService::getTeacherSpecializations(int teacherId) {
+    std::vector<Specialization> specializations;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return specializations;
+    }
+    
+    // Получаем специализации преподавателя из таблицы specialization_list
+    std::string sql = "SELECT specialization, name FROM specialization_list WHERE specialization IN (SELECT specialization FROM teachers WHERE teacher_id = $1)";
+    const char* params[1] = { std::to_string(teacherId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++) {
+            Specialization spec;
+            spec.specializationCode = std::stoi(PQgetvalue(res, i, 0));
+            spec.name = PQgetvalue(res, i, 1);
+            specializations.push_back(spec);
+        }
+    }
+    PQclear(res);
+    
+    return specializations;
+}
+
+bool DatabaseService::removeTeacherSpecialization(int teacherId, int specializationCode) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    // Удаляем специализацию из specialization_list
+    std::string sql = "DELETE FROM specialization_list WHERE specialization = $1 AND specialization IN (SELECT specialization FROM teachers WHERE teacher_id = $2)";
+    const char* params[2] = {
+        std::to_string(specializationCode).c_str(),
+        std::to_string(teacherId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
 }

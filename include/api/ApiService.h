@@ -35,7 +35,6 @@ private:
     ConfigManager configManager;
     ApiConfig apiConfig;
     
-    // Используем структуры из Models.h
     std::unordered_map<std::string, Session> sessions;
     std::unordered_map<std::string, PasswordResetToken> passwordResetTokens;
     std::mutex sessionsMutex;
@@ -85,8 +84,14 @@ public:
     // Password hashing
     std::string hashPassword(const std::string& password);
 
-
+    // Specialization management
     std::string handleAddSpecialization(const std::string& body, const std::string& sessionToken);
+    std::string handleDeleteSpecialization(int specializationCode, const std::string& sessionToken);
+    
+    // Teacher specialization management - ДОБАВЛЕНО
+    std::string handleAddTeacherSpecialization(const std::string& body, const std::string& sessionToken);
+    std::string handleRemoveTeacherSpecialization(int teacherId, int specializationCode, const std::string& sessionToken);
+    std::string getTeacherSpecializationsJson(int teacherId, const std::string& sessionToken);
     
     // CRUD operations
     std::string handleAddTeacher(const std::string& body, const std::string& sessionToken);

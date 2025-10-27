@@ -6,70 +6,114 @@ using json = nlohmann::json;
 
 std::string ApiService::handleAddTeacher(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
     }
     
     try {
         json j = json::parse(body);
         Teacher teacher;
         
-        // Безопасное извлечение полей с проверкой на null и наличие
-        if (j.contains("last_name") && !j["last_name"].is_null()) {
-            teacher.lastName = j["last_name"];
-        } else {
-            return createJsonResponse("{\"error\": \"Field 'last_name' is required\"}", 400);
-        }
-        
-        if (j.contains("first_name") && !j["first_name"].is_null()) {
-            teacher.firstName = j["first_name"];
-        } else {
-            return createJsonResponse("{\"error\": \"Field 'first_name' is required\"}", 400);
-        }
-        
-        // Необязательные поля
-        if (j.contains("middle_name") && !j["middle_name"].is_null()) {
-            teacher.middleName = j["middle_name"];
-        } else {
-            teacher.middleName = "";
-        }
-        
-        if (j.contains("experience") && !j["experience"].is_null()) {
-            teacher.experience = j["experience"];
-        } else {
-            teacher.experience = 0; // значение по умолчанию
-        }
-        
-        if (j.contains("specialization") && !j["specialization"].is_null()) {
-            teacher.specialization = j["specialization"];
-        } else {
-            return createJsonResponse("{\"error\": \"Field 'specialization' is required\"}", 400);
-        }
-        
-        if (j.contains("email") && !j["email"].is_null()) {
-            teacher.email = j["email"];
-        } else {
-            teacher.email = "";
-        }
-        
-        if (j.contains("phone_number") && !j["phone_number"].is_null()) {
-            teacher.phoneNumber = j["phone_number"];
-        } else {
-            teacher.phoneNumber = "";
-        }
+        teacher.lastName = j["last_name"];
+        teacher.firstName = j["first_name"];
+        teacher.middleName = j.value("middle_name", "");
+        teacher.experience = j.value("experience", 0);
+        teacher.email = j.value("email", "");
+        teacher.phoneNumber = j.value("phone_number", "");
         
         std::cout << "👨‍🏫 Adding teacher: " << teacher.firstName << " " << teacher.lastName << std::endl;
-        std::cout << "📊 Experience: " << teacher.experience << ", Specialization: " << teacher.specialization << std::endl;
         
+        // Обрабатываем специализации из массива
+        std::vector<std::string> specNames;
+        if (j.contains("specialization") && !j["specialization"].is_null()) {
+            std::string specializationStr = j["specialization"];
+            std::cout << "🔗 Processing specializations: " << specializationStr << std::endl;
+            
+            // Разделяем строку специализаций по запятой
+            size_t start = 0, end = 0;
+            while ((end = specializationStr.find(',', start)) != std::string::npos) {
+                std::string name = specializationStr.substr(start, end - start);
+                name.erase(0, name.find_first_not_of(" \t\n\r\f\v"));
+                name.erase(name.find_last_not_of(" \t\n\r\f\v") + 1);
+                if (!name.empty()) {
+                    specNames.push_back(name);
+                }
+                start = end + 1;
+            }
+            // Добавляем последнюю специализацию
+            std::string lastName = specializationStr.substr(start);
+            lastName.erase(0, lastName.find_first_not_of(" \t\n\r\f\v"));
+            lastName.erase(lastName.find_last_not_of(" \t\n\r\f\v") + 1);
+            if (!lastName.empty()) {
+                specNames.push_back(lastName);
+            }
+            
+            // Создаем объекты Specialization
+            for (const auto& name : specNames) {
+                Specialization spec;
+                spec.name = name;
+                teacher.specializations.push_back(spec);
+            }
+        }
+        
+        // Добавляем преподавателя в БД
         if (dbService.addTeacher(teacher)) {
-            std::cout << "✅ Teacher added successfully" << std::endl;
-            return createJsonResponse("{\"message\": \"Teacher added successfully\"}", 201);
+            std::cout << "✅ Teacher added successfully with specializations" << std::endl;
+            
+            // Получаем обновленный список преподавателей
+            auto teachers = dbService.getTeachers();
+            json teachersArray = json::array();
+            
+            for (const auto& t : teachers) {
+                json teacherJson;
+                teacherJson["teacher_id"] = t.teacherId;
+                teacherJson["last_name"] = t.lastName;
+                teacherJson["first_name"] = t.firstName;
+                teacherJson["middle_name"] = t.middleName;
+                teacherJson["experience"] = t.experience;
+                teacherJson["email"] = t.email;
+                teacherJson["phone_number"] = t.phoneNumber;
+                
+                // Добавляем специализации преподавателя
+                auto specializations = dbService.getTeacherSpecializations(t.teacherId);
+                json specArray = json::array();
+                for (const auto& spec : specializations) {
+                    json specJson;
+                    specJson["code"] = spec.specializationCode;
+                    specJson["name"] = spec.name;
+                    specArray.push_back(specJson);
+                }
+                teacherJson["specializations"] = specArray;
+                
+                teachersArray.push_back(teacherJson);
+            }
+            
+            // Формируем полный ответ
+            json response;
+            response["success"] = true;
+            response["message"] = "Преподаватель успешно добавлен";
+            response["teacher_id"] = 4; // Временное значение
+            response["data"] = teachersArray; // Отправляем весь обновленный список
+            
+            std::string responseStr = response.dump();
+            std::cout << "📤 Sending updated teachers list, count: " << teachersArray.size() << std::endl;
+            
+            return createJsonResponse(responseStr, 201);
         } else {
             std::cout << "❌ Failed to add teacher" << std::endl;
-            return createJsonResponse("{\"error\": \"Failed to add teacher\"}", 500);
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Ошибка при добавлении преподавателя";
+            return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
         std::cout << "💥 EXCEPTION in handleAddTeacher: " << e.what() << std::endl;
-        return createJsonResponse("{\"error\": \"Invalid request format: " + std::string(e.what()) + "\"}", 400);
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Неверный формат запроса: " + std::string(e.what());
+        return createJsonResponse(errorResponse.dump(), 400);
     }
 }
 
@@ -93,7 +137,6 @@ std::string ApiService::handleUpdateTeacher(const std::string& body, int teacher
         if (j.contains("first_name")) teacher.firstName = j["first_name"];
         if (j.contains("middle_name")) teacher.middleName = j["middle_name"];
         if (j.contains("experience")) teacher.experience = j["experience"];
-        if (j.contains("specialization")) teacher.specialization = j["specialization"];
         if (j.contains("email")) teacher.email = j["email"];
         if (j.contains("phone_number")) teacher.phoneNumber = j["phone_number"];
         
@@ -126,7 +169,64 @@ std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& se
     }
 }
 
-// ДОБАВЛЕНО: Обработчик для добавления специализации
+std::string ApiService::handleAddTeacherSpecialization(const std::string& body, const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+    }
+
+    try {
+        json j = json::parse(body);
+        
+        if (!j.contains("teacher_id") || !j.contains("specialization_code")) {
+            return createJsonResponse("{\"error\": \"Fields 'teacher_id' and 'specialization_code' are required\"}", 400);
+        }
+        
+        int teacherId = j["teacher_id"];
+        int specializationCode = j["specialization_code"];
+        
+        std::cout << "🔗 Adding specialization " << specializationCode << " to teacher " << teacherId << std::endl;
+        
+        if (dbService.addTeacherSpecialization(teacherId, specializationCode)) {
+            return createJsonResponse("{\"message\": \"Specialization added to teacher successfully\"}", 201);
+        } else {
+            return createJsonResponse("{\"error\": \"Failed to add specialization to teacher\"}", 500);
+        }
+    } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleAddTeacherSpecialization: " << e.what() << std::endl;
+        return createJsonResponse("{\"error\": \"Invalid request format\"}", 400);
+    }
+}
+
+std::string ApiService::handleRemoveTeacherSpecialization(int teacherId, int specializationCode, const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+    }
+    
+    std::cout << "🔗 Removing specialization " << specializationCode << " from teacher " << teacherId << std::endl;
+    
+    if (dbService.removeTeacherSpecialization(teacherId, specializationCode)) {
+        return createJsonResponse("{\"message\": \"Specialization removed from teacher successfully\"}");
+    } else {
+        return createJsonResponse("{\"error\": \"Failed to remove specialization from teacher\"}", 500);
+    }
+}
+
+std::string ApiService::handleDeleteSpecialization(int specializationCode, const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
+    }
+    
+    std::cout << "🗑️ Deleting specialization with code: " << specializationCode << std::endl;
+    
+    if (dbService.deleteSpecialization(specializationCode)) {
+        std::cout << "✅ Specialization deleted successfully" << std::endl;
+        return createJsonResponse("{\"message\": \"Specialization deleted successfully\"}");
+    } else {
+        std::cout << "❌ Failed to delete specialization" << std::endl;
+        return createJsonResponse("{\"error\": \"Failed to delete specialization\"}", 500);
+    }
+}
+
 std::string ApiService::handleAddSpecialization(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);
@@ -140,13 +240,19 @@ std::string ApiService::handleAddSpecialization(const std::string& body, const s
         }
         
         std::string name = j["name"];
-        int code = j.value("code", 0); // код можно передавать или генерировать автоматически
+        int code = j.value("code", 0);
         
-        // Здесь можно добавить логику для сохранения специализации
-        // Пока просто возвращаем успех
+        Specialization spec;
+        spec.name = name;
+        spec.specializationCode = code;
+        
         std::cout << "📚 Adding specialization: " << name << " (code: " << code << ")" << std::endl;
         
-        return createJsonResponse("{\"message\": \"Specialization added successfully\", \"code\": " + std::to_string(code) + "}", 201);
+        if (dbService.addSpecialization(spec)) {
+            return createJsonResponse("{\"message\": \"Specialization added successfully\", \"code\": " + std::to_string(code) + "}", 201);
+        } else {
+            return createJsonResponse("{\"error\": \"Failed to add specialization\"}", 500);
+        }
         
     } catch (const std::exception& e) {
         std::cout << "💥 EXCEPTION in handleAddSpecialization: " << e.what() << std::endl;
@@ -154,7 +260,6 @@ std::string ApiService::handleAddSpecialization(const std::string& body, const s
     }
 }
 
-// Остальные методы без изменений...
 std::string ApiService::handleAddStudent(const std::string& body, const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"error\": \"Unauthorized\"}", 401);

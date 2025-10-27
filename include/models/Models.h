@@ -3,6 +3,7 @@
 
 #include <string>
 #include <chrono>
+#include <vector>
 
 struct DatabaseConfig {
     std::string language;
@@ -39,15 +40,21 @@ struct User {
     std::string phoneNumber;
 };
 
+struct Specialization {
+    int specializationCode;
+    std::string name;
+};
+
 struct Teacher {
     int teacherId;
     std::string lastName;
     std::string firstName;
     std::string middleName;
     int experience;
-    std::string specialization;
     std::string email;
     std::string phoneNumber;
+    std::string specialization;  // Теперь это строка для отображения
+    std::vector<Specialization> specializations;  // Для хранения списка специализаций
 };
 
 struct Student {
