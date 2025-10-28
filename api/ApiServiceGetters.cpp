@@ -22,7 +22,7 @@ std::string ApiService::getSpecializationsJson(const std::string& sessionToken) 
     for (const auto& specialization : specializations) {
         json specJson;
         specJson["code"] = specialization.specializationCode;
-        specJson["name"] = specialization.name;
+        specJson["name"] = specialization.name.empty() ? "" : specialization.name;
         j.push_back(specJson);
     }
 
@@ -48,12 +48,12 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
     for (auto& teacher : teachers) {
         json teacherJson;
         teacherJson["teacher_id"] = teacher.teacherId;
-        teacherJson["last_name"] = teacher.lastName;
-        teacherJson["first_name"] = teacher.firstName;
-        teacherJson["middle_name"] = teacher.middleName;
+        teacherJson["last_name"] = teacher.lastName.empty() ? "" : teacher.lastName;
+        teacherJson["first_name"] = teacher.firstName.empty() ? "" : teacher.firstName;
+        teacherJson["middle_name"] = teacher.middleName.empty() ? "" : teacher.middleName;
         teacherJson["experience"] = teacher.experience;
-        teacherJson["email"] = teacher.email;
-        teacherJson["phone_number"] = teacher.phoneNumber;
+        teacherJson["email"] = teacher.email.empty() ? "" : teacher.email;
+        teacherJson["phone_number"] = teacher.phoneNumber.empty() ? "" : teacher.phoneNumber;
         
         // Получаем специализации преподавателя
         auto specializations = dbService.getTeacherSpecializations(teacher.teacherId);
@@ -64,22 +64,21 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         for (const auto& spec : specializations) {
             json specJson;
             specJson["code"] = spec.specializationCode;
-            specJson["name"] = spec.name;
+            specJson["name"] = spec.name.empty() ? "" : spec.name;
             specArray.push_back(specJson);
             
             if (!specNames.empty()) {
                 specNames += ", ";
             }
-            specNames += spec.name;
+            specNames += spec.name.empty() ? "" : spec.name;
         }
         
         teacherJson["specializations"] = specArray;
-        teacherJson["specialization"] = specNames; // Для обратной совместимости
+        teacherJson["specialization"] = specNames.empty() ? "" : specNames;
         
         teachersArray.push_back(teacherJson);
     }
     
-    // Единый формат ответа
     json response;
     response["success"] = true;
     response["data"] = teachersArray;
@@ -103,7 +102,7 @@ std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::
     for (const auto& spec : specializations) {
         json specJson;
         specJson["code"] = spec.specializationCode;
-        specJson["name"] = spec.name;
+        specJson["name"] = spec.name.empty() ? "" : spec.name;
         j.push_back(specJson);
     }
     
@@ -113,7 +112,7 @@ std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::
     return createJsonResponse(response.dump());
 }
 
-// Остальные методы без изменений...
+// Получение профиля пользователя
 std::string ApiService::getProfile(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         json errorResponse;
@@ -141,11 +140,12 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
     
     json userJson;
     userJson["userId"] = user.userId;
-    userJson["email"] = user.email;
-    userJson["firstName"] = user.firstName;
-    userJson["lastName"] = user.lastName;
-    userJson["middleName"] = user.middleName;
-    userJson["phoneNumber"] = user.phoneNumber;
+    userJson["email"] = user.email.empty() ? "" : user.email;
+    userJson["firstName"] = user.firstName.empty() ? "" : user.firstName;
+    userJson["lastName"] = user.lastName.empty() ? "" : user.lastName;
+    userJson["middleName"] = user.middleName.empty() ? "" : user.middleName;
+    userJson["phoneNumber"] = user.phoneNumber.empty() ? "" : user.phoneNumber;
+    userJson["login"] = user.login.empty() ? "" : user.login;
     
     json response;
     response["success"] = true;
@@ -153,6 +153,7 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
     return createJsonResponse(response.dump());
 }
 
+// Получение студентов
 std::string ApiService::getStudentsJson(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         json errorResponse;
@@ -168,14 +169,14 @@ std::string ApiService::getStudentsJson(const std::string& sessionToken) {
     for (const auto& student : students) {
         json studentJson;
         studentJson["studentCode"] = student.studentCode;
-        studentJson["lastName"] = student.lastName;
-        studentJson["firstName"] = student.firstName;
-        studentJson["middleName"] = student.middleName;
-        studentJson["phoneNumber"] = student.phoneNumber;
-        studentJson["email"] = student.email;
+        studentJson["lastName"] = student.lastName.empty() ? "" : student.lastName;
+        studentJson["firstName"] = student.firstName.empty() ? "" : student.firstName;
+        studentJson["middleName"] = student.middleName.empty() ? "" : student.middleName;
+        studentJson["phoneNumber"] = student.phoneNumber.empty() ? "" : student.phoneNumber;
+        studentJson["email"] = student.email.empty() ? "" : student.email;
         studentJson["groupId"] = student.groupId;
-        studentJson["passportSeries"] = student.passportSeries;
-        studentJson["passportNumber"] = student.passportNumber;
+        studentJson["passportSeries"] = student.passportSeries.empty() ? "" : student.passportSeries;
+        studentJson["passportNumber"] = student.passportNumber.empty() ? "" : student.passportNumber;
         
         j.push_back(studentJson);
     }
@@ -186,6 +187,7 @@ std::string ApiService::getStudentsJson(const std::string& sessionToken) {
     return createJsonResponse(response.dump());
 }
 
+// Получение групп
 std::string ApiService::getGroupsJson(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         json errorResponse;
@@ -201,7 +203,7 @@ std::string ApiService::getGroupsJson(const std::string& sessionToken) {
     for (const auto& group : groups) {
         json groupJson;
         groupJson["groupId"] = group.groupId;
-        groupJson["name"] = group.name;
+        groupJson["name"] = group.name.empty() ? "" : group.name;
         groupJson["studentCount"] = group.studentCount;
         groupJson["teacherId"] = group.teacherId;
         
@@ -214,6 +216,7 @@ std::string ApiService::getGroupsJson(const std::string& sessionToken) {
     return createJsonResponse(response.dump());
 }
 
+// Получение портфолио
 std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         json errorResponse;
@@ -231,9 +234,9 @@ std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
         portfolioJson["portfolioId"] = portfolio.portfolioId;
         portfolioJson["studentCode"] = portfolio.studentCode;
         portfolioJson["measureCode"] = portfolio.measureCode;
-        portfolioJson["date"] = portfolio.date;
-        portfolioJson["passportSeries"] = portfolio.passportSeries;
-        portfolioJson["passportNumber"] = portfolio.passportNumber;
+        portfolioJson["date"] = portfolio.date.empty() ? "" : portfolio.date;
+        portfolioJson["passportSeries"] = portfolio.passportSeries.empty() ? "" : portfolio.passportSeries;
+        portfolioJson["passportNumber"] = portfolio.passportNumber.empty() ? "" : portfolio.passportNumber;
         
         j.push_back(portfolioJson);
     }
@@ -244,6 +247,7 @@ std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
     return createJsonResponse(response.dump());
 }
 
+// Получение событий
 std::string ApiService::getEventsJson(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         json errorResponse;
@@ -259,12 +263,12 @@ std::string ApiService::getEventsJson(const std::string& sessionToken) {
     for (const auto& event : events) {
         json eventJson;
         eventJson["eventId"] = event.eventId;
-        eventJson["eventCategory"] = event.eventCategory;
-        eventJson["eventType"] = event.eventType;
-        eventJson["startDate"] = event.startDate;
-        eventJson["endDate"] = event.endDate;
-        eventJson["location"] = event.location;
-        eventJson["lore"] = event.lore;
+        eventJson["eventCategory"] = event.eventCategory.empty() ? "" : event.eventCategory;
+        eventJson["eventType"] = event.eventType.empty() ? "" : event.eventType;
+        eventJson["startDate"] = event.startDate.empty() ? "" : event.startDate;
+        eventJson["endDate"] = event.endDate.empty() ? "" : event.endDate;
+        eventJson["location"] = event.location.empty() ? "" : event.location;
+        eventJson["lore"] = event.lore.empty() ? "" : event.lore;
         
         j.push_back(eventJson);
     }
@@ -291,7 +295,7 @@ std::string ApiService::handleStatus() {
     
     response["apiConfig"] = {
         {"port", apiConfig.port},
-        {"host", apiConfig.host},
+        {"host", apiConfig.host.empty() ? "" : apiConfig.host},
         {"maxConnections", apiConfig.maxConnections},
         {"sessionTimeoutHours", apiConfig.sessionTimeoutHours}
     };

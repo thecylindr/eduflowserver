@@ -202,7 +202,7 @@ void ApiService::runServer() {
 }
 
 void ApiService::handleClient(SOCKET_TYPE clientSocket) {
-    char buffer[16384] = {0}; // Инициализируем нулями
+    char buffer[16384] = {0};
     int bytesReceived;
     
 #ifdef _WIN32

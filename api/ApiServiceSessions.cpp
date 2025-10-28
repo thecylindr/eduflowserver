@@ -12,8 +12,8 @@ void ApiService::saveSessionsToFile() {
     json sessionsJson;
     for (const auto& [token, session] : sessions) {
         json sessionJson;
-        sessionJson["userId"] = session.userId;
-        sessionJson["email"] = session.email;
+        sessionJson["userId"] = session.userId.empty() ? "" : session.userId;
+        sessionJson["email"] = session.email.empty() ? "" : session.email;
         sessionJson["createdAt"] = std::chrono::duration_cast<std::chrono::seconds>(
             session.createdAt.time_since_epoch()).count();
         sessionJson["lastActivity"] = std::chrono::duration_cast<std::chrono::seconds>(
@@ -52,8 +52,8 @@ void ApiService::loadSessionsFromFile() {
         
         for (auto& [token, sessionJson] : sessionsJson.items()) {
             Session session;
-            session.userId = sessionJson["userId"];
-            session.email = sessionJson["email"];
+            session.userId = sessionJson.value("userId", "");
+            session.email = sessionJson.value("email", "");
             
             auto createdAtSeconds = std::chrono::seconds(sessionJson["createdAt"]);
             session.createdAt = std::chrono::system_clock::time_point(createdAtSeconds);
@@ -119,8 +119,8 @@ std::string ApiService::getSessionInfo(const std::string& sessionToken) {
     
     json response;
     response["success"] = true;
-    response["userId"] = it->second.userId;
-    response["email"] = it->second.email;
+    response["userId"] = it->second.userId.empty() ? "" : it->second.userId;
+    response["email"] = it->second.email.empty() ? "" : it->second.email;
     response["ageHours"] = age.count();
     response["inactiveMinutes"] = inactive.count();
     response["timeoutHours"] = apiConfig.sessionTimeoutHours;
