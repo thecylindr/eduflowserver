@@ -107,23 +107,24 @@ std::string ApiService::getSessionInfo(const std::string& sessionToken) {
     
     auto it = sessions.find(sessionToken);
     if (it == sessions.end()) {
-        return "{\"error\": \"Invalid session\"}";
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Invalid session";
+        return createJsonResponse(errorResponse.dump(), 401);
     }
     
     auto now = std::chrono::system_clock::now();
     auto age = std::chrono::duration_cast<std::chrono::hours>(now - it->second.createdAt);
     auto inactive = std::chrono::duration_cast<std::chrono::minutes>(now - it->second.lastActivity);
     
-    // РУЧНОЕ ФОРМИРОВАНИЕ JSON БЕЗ БИБЛИОТЕКИ
-    std::stringstream ss;
-    ss << "{"
-       << "\"userId\":\"" << it->second.userId << "\","
-       << "\"email\":\"" << it->second.email << "\","
-       << "\"ageHours\":" << age.count() << ","
-       << "\"inactiveMinutes\":" << inactive.count() << ","
-       << "\"timeoutHours\":" << apiConfig.sessionTimeoutHours << ","
-       << "\"remainingHours\":" << (apiConfig.sessionTimeoutHours - age.count())
-       << "}";
+    json response;
+    response["success"] = true;
+    response["userId"] = it->second.userId;
+    response["email"] = it->second.email;
+    response["ageHours"] = age.count();
+    response["inactiveMinutes"] = inactive.count();
+    response["timeoutHours"] = apiConfig.sessionTimeoutHours;
+    response["remainingHours"] = (apiConfig.sessionTimeoutHours - age.count());
     
-    return ss.str();
+    return createJsonResponse(response.dump());
 }

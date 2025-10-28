@@ -665,19 +665,18 @@ bool DatabaseService::updateTeacher(const Teacher& teacher) {
         return false;
     }
     
-    std::string sql = "UPDATE teachers SET last_name = $1, first_name = $2, middle_name = $3, experience = $4, specialization = $5, email = $6, phone_number = $7 WHERE teacher_id = $8";
-    const char* params[8] = {
+    std::string sql = "UPDATE teachers SET last_name = $1, first_name = $2, middle_name = $3, experience = $4, email = $5, phone_number = $6 WHERE teacher_id = $7";
+    const char* params[7] = {
         teacher.lastName.c_str(),
         teacher.firstName.c_str(),
         teacher.middleName.c_str(),
         std::to_string(teacher.experience).c_str(),
-        teacher.specialization.c_str(),
         teacher.email.c_str(),
         teacher.phoneNumber.c_str(),
         std::to_string(teacher.teacherId).c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     PQclear(res);
     
@@ -691,6 +690,14 @@ bool DatabaseService::deleteTeacher(int teacherId) {
         return false;
     }
     
+    // Сначала удаляем специализации преподавателя
+    std::string deleteSpecsSql = "DELETE FROM specialization_list WHERE specialization IN (SELECT specialization FROM teachers WHERE teacher_id = $1)";
+    const char* deleteSpecsParams[1] = { std::to_string(teacherId).c_str() };
+    
+    PGresult* deleteSpecsRes = PQexecParams(connection, deleteSpecsSql.c_str(), 1, NULL, deleteSpecsParams, NULL, NULL, 0);
+    PQclear(deleteSpecsRes);
+    
+    // Затем удаляем преподавателя
     std::string sql = "DELETE FROM teachers WHERE teacher_id = $1";
     const char* params[1] = { std::to_string(teacherId).c_str() };
     
@@ -767,12 +774,42 @@ Teacher DatabaseService::getTeacherById(int teacherId) {
     teacher.firstName = PQgetvalue(res, 0, 2);
     teacher.middleName = PQgetvalue(res, 0, 3);
     teacher.experience = std::stoi(PQgetvalue(res, 0, 4));
-    teacher.specialization = PQgetvalue(res, 0, 5);
+    
+    // ДОБАВЛЯЕМ КОД СПЕЦИАЛИЗАЦИИ
+    if (!PQgetisnull(res, 0, 5)) {
+        teacher.specializationCode = std::stoi(PQgetvalue(res, 0, 5));
+    } else {
+        teacher.specializationCode = 0;
+    }
+    
     teacher.email = PQgetvalue(res, 0, 6);
     teacher.phoneNumber = PQgetvalue(res, 0, 7);
     
     PQclear(res);
     return teacher;
+}
+
+bool DatabaseService::removeAllTeacherSpecializations(int teacherId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    // Получаем код специализации преподавателя
+    Teacher teacher = getTeacherById(teacherId);
+    if (teacher.teacherId == 0) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM specialization_list WHERE specialization = $1";
+    const char* params[1] = { std::to_string(teacher.specializationCode).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    
+    return success;
 }
 
 Student DatabaseService::getStudentById(int studentId) {
