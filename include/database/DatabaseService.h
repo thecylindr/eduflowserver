@@ -12,6 +12,7 @@ public:
     DatabaseService();
     ~DatabaseService();
 
+    // Database setup and management
     bool connect(const DatabaseConfig& config);
     void disconnect();
     bool testConnection();
@@ -56,12 +57,12 @@ public:
     std::vector<Event> getEvents();
     bool addEvent(const Event& event);
     
-    // Specializations management - ИСПРАВЛЕННЫЕ ОБЪЯВЛЕНИЯ
+    // Specializations management
     std::vector<Specialization> getSpecializations();
     bool addSpecialization(const Specialization& specialization);
     bool deleteSpecialization(int specializationCode);
     
-    // Teacher specializations management - ИСПРАВЛЕННЫЕ ОБЪЯВЛЕНИЯ
+    // Teacher specializations management
     bool addTeacherSpecialization(int teacherId, int specializationCode);
     bool removeTeacherSpecialization(int teacherId, int specializationCode);
     std::vector<Specialization> getTeacherSpecializations(int teacherId);

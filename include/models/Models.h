@@ -54,8 +54,8 @@ struct Teacher {
     std::string email;
     std::string phoneNumber;
     std::string specialization;  // Строка для отображения
-    int specializationCode;      // Код специализации - ДОБАВИТЬ
     std::vector<Specialization> specializations;  // Для хранения списка специализаций
+    int specializationCode;  // Добавьте эту строку - код специализации
 };
 
 struct Student {

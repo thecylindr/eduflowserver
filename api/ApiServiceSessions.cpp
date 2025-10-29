@@ -61,7 +61,7 @@ void ApiService::loadSessionsFromFile() {
             auto lastActivitySeconds = std::chrono::seconds(sessionJson["lastActivity"]);
             session.lastActivity = std::chrono::system_clock::time_point(lastActivitySeconds);
             
-            // ИСПРАВЛЕНИЕ: Проверяем по последней активности, а не по созданию
+            // Проверяем по последней активности, а не по созданию
             auto duration = std::chrono::duration_cast<std::chrono::hours>(now - session.lastActivity);
             if (duration.count() <= apiConfig.sessionTimeoutHours) {
                 sessions[token] = session;
@@ -101,12 +101,30 @@ void ApiService::cleanupExpiredSessions() {
     }
 }
 
-// Получение информации о сессии
+// Получение информации о сессии - ПОЛНОСТЬЮ ПЕРЕПИСАННЫЙ МЕТОД
 std::string ApiService::getSessionInfo(const std::string& sessionToken) {
+    if (sessionToken.empty()) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Session token is required";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    // Используем validateSession для проверки (она уже использует мьютекс внутри)
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Invalid session";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    // После validateSession сессия гарантированно существует и валидна
+    // Нужно только защитить доступ к данным сессии
     std::lock_guard<std::mutex> lock(sessionsMutex);
     
     auto it = sessions.find(sessionToken);
     if (it == sessions.end()) {
+        // Это не должно происходить после validateSession, но на всякий случай
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Invalid session";

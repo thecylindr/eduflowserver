@@ -205,9 +205,14 @@ else()
     message(FATAL_ERROR "Missing required file: src/main.cpp")
 endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseService.cpp")
-    list(APPEND SOURCES "database/DatabaseService.cpp")
-    message(STATUS "Found: database/DatabaseService.cpp")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseSetup.cpp")
+    list(APPEND SOURCES "database/DatabaseSetup.cpp")
+    message(STATUS "Found: database/DatabaseSetup.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseCrud.cpp")
+    list(APPEND SOURCES "database/DatabaseCrud.cpp")
+    message(STATUS "Found: database/DatabaseCrud.cpp")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/configs/ConfigManager.cpp")
@@ -215,12 +220,18 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/configs/ConfigManager.cpp")
     message(STATUS "Found: configs/ConfigManager.cpp")
 endif()
 
-# ЗАМЕНА: вместо api/ApiService.cpp используем три новых файла
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceMain.cpp")
     list(APPEND SOURCES "api/ApiServiceMain.cpp")
     message(STATUS "Found: api/ApiServiceMain.cpp")
 else()
     message(FATAL_ERROR "Missing required file: api/ApiServiceMain.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceProfile.cpp")
+    list(APPEND SOURCES "api/ApiServiceProfile.cpp")
+    message(STATUS "Found: api/ApiServiceProfile.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceProfile.cpp")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceGetters.cpp")

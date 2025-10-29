@@ -75,6 +75,9 @@ public:
     std::string handleResetPassword(const std::string& body);
     std::string handleLogout(const std::string& sessionToken);
     
+    // New methods for profile and password management
+    std::string handleChangePassword(const std::string& body, const std::string& sessionToken);
+    
     std::string getSessionInfo(const std::string& token);
     
     // Session validation
@@ -88,7 +91,7 @@ public:
     std::string handleAddSpecialization(const std::string& body, const std::string& sessionToken);
     std::string handleDeleteSpecialization(int specializationCode, const std::string& sessionToken);
     
-    // Teacher specialization management - ДОБАВЛЕНО
+    // Teacher specialization management
     std::string handleAddTeacherSpecialization(const std::string& body, const std::string& sessionToken);
     std::string handleRemoveTeacherSpecialization(int teacherId, int specializationCode, const std::string& sessionToken);
     std::string getTeacherSpecializationsJson(int teacherId, const std::string& sessionToken);
