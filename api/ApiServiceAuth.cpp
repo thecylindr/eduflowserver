@@ -387,8 +387,7 @@ std::string ApiService::handleLogout(const std::string& sessionToken) {
         std::lock_guard<std::mutex> lock(sessionsMutex);
         size_t erased = sessions.erase(sessionToken);
         std::cout << "✅ Session removed, total sessions now: " << sessions.size() 
-                  << " (erased: " << erased << ")" << std::endl;
-    }
+                  << " (erased: " << erased << ")" << std::endl;}
     
     json response;
     response["success"] = true;

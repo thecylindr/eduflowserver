@@ -193,9 +193,25 @@ std::string ApiService::handleChangePassword(const std::string& body, const std:
         if (dbService.updateUser(user)) {
             std::cout << "✅ Пароль успешно изменен" << std::endl;
             
+            // УДАЛЯЕМ ВСЕ СЕССИИ, КРОМЕ ТЕКУЩЕЙ
+            {
+                std::lock_guard<std::mutex> lock(sessionsMutex);
+                auto it = sessions.begin();
+                while (it != sessions.end()) {
+                    if (it->second.userId == userId && it->first != sessionToken) {
+                        std::cout << "🗑️ Удаление сессии: " << it->first.substr(0, 16) << "..." << std::endl;
+                        it = sessions.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+            
+            std::cout << "✅ Все другие сессии удалены" << std::endl;
+            
             json response;
             response["success"] = true;
-            response["message"] = "Пароль успешно изменен";
+            response["message"] = "Пароль успешно изменен. Все другие сессии были отозваны.";
             
             return createJsonResponse(response.dump());
         } else {
@@ -210,6 +226,105 @@ std::string ApiService::handleChangePassword(const std::string& body, const std:
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Неверный формат запроса: " + std::string(e.what());
+        return createJsonResponse(errorResponse.dump(), 400);
+    }
+}
+
+std::string ApiService::handleGetSessions(const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    std::string userId = getUserIdFromSession(sessionToken);
+    if (userId.empty()) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Invalid session";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    std::lock_guard<std::mutex> lock(sessionsMutex);
+    json sessionsArray = json::array();
+    
+    auto now = std::chrono::system_clock::now();
+    
+    for (const auto& [token, session] : sessions) {
+        if (session.userId == userId) {
+            auto age = std::chrono::duration_cast<std::chrono::hours>(now - session.createdAt);
+            auto inactive = std::chrono::duration_cast<std::chrono::minutes>(now - session.lastActivity);
+            
+            json sessionJson;
+            sessionJson["token"] = token;
+            sessionJson["email"] = session.email;
+            sessionJson["createdAt"] = std::chrono::duration_cast<std::chrono::seconds>(session.createdAt.time_since_epoch()).count();
+            sessionJson["lastActivity"] = std::chrono::duration_cast<std::chrono::seconds>(session.lastActivity.time_since_epoch()).count();
+            sessionJson["ageHours"] = age.count();
+            sessionJson["inactiveMinutes"] = inactive.count();
+            sessionJson["isCurrent"] = (token == sessionToken);
+            
+            sessionsArray.push_back(sessionJson);
+        }
+    }
+    
+    json response;
+    response["success"] = true;
+    response["data"] = sessionsArray;
+    
+    return createJsonResponse(response.dump());
+}
+
+// Добавить метод для отзыва сессии
+std::string ApiService::handleRevokeSession(const std::string& body, const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    try {
+        json j = json::parse(body);
+        
+        if (!j.contains("token")) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Token is required";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        std::string targetToken = j["token"];
+        std::string userId = getUserIdFromSession(sessionToken);
+        
+        if (targetToken == sessionToken) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Cannot revoke current session";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        std::lock_guard<std::mutex> lock(sessionsMutex);
+        auto it = sessions.find(targetToken);
+        if (it != sessions.end() && it->second.userId == userId) {
+            sessions.erase(it);
+            std::cout << "✅ Сессия отозвана: " << targetToken.substr(0, 16) << "..." << std::endl;
+            
+            json response;
+            response["success"] = true;
+            response["message"] = "Session revoked successfully";
+            return createJsonResponse(response.dump());
+        } else {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Session not found or access denied";
+            return createJsonResponse(errorResponse.dump(), 404);
+        }
+    } catch (const std::exception& e) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Invalid request format";
         return createJsonResponse(errorResponse.dump(), 400);
     }
 }

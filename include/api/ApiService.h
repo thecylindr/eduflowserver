@@ -79,6 +79,9 @@ public:
     std::string handleChangePassword(const std::string& body, const std::string& sessionToken);
     
     std::string getSessionInfo(const std::string& token);
+
+    std::string handleGetSessions(const std::string& sessionToken);
+    std::string handleRevokeSession(const std::string& body, const std::string& sessionToken);
     
     // Session validation
     bool validateSession(const std::string& token);
