@@ -1,3 +1,5 @@
+// [Замените код в ApiServiceGetters.cpp]
+
 #include "api/ApiService.h"
 #include "json.hpp"
 #include <mutex>
@@ -85,7 +87,6 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
     return createJsonResponse(response.dump());
 }
 
-// Остальные методы остаются без изменений...
 std::string ApiService::getTeachersJson(const std::string& sessionToken) {
     if (!validateSession(sessionToken)) {
         json errorResponse;
@@ -190,6 +191,115 @@ std::string ApiService::getGroupsJson(const std::string& sessionToken) {
         groupJson["teacherId"] = group.teacherId;
         
         j.push_back(groupJson);
+    }
+    
+    json response;
+    response["success"] = true;
+    response["data"] = j;
+    return createJsonResponse(response.dump());
+}
+
+std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto specializations = dbService.getSpecializations();
+    json j = json::array();
+    
+    for (const auto& spec : specializations) {
+        json specJson;
+        specJson["code"] = spec.specializationCode;
+        specJson["name"] = spec.name;
+        j.push_back(specJson);
+    }
+    
+    json response;
+    response["success"] = true;
+    response["data"] = j;
+    return createJsonResponse(response.dump());
+}
+
+std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto specializations = dbService.getTeacherSpecializations(teacherId);
+    json j = json::array();
+    
+    for (const auto& spec : specializations) {
+        json specJson;
+        specJson["code"] = spec.specializationCode;
+        specJson["name"] = spec.name;
+        j.push_back(specJson);
+    }
+    
+    json response;
+    response["success"] = true;
+    response["data"] = j;
+    return createJsonResponse(response.dump());
+}
+
+std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto portfolios = dbService.getPortfolios();
+    json j = json::array();
+    
+    for (const auto& portfolio : portfolios) {
+        json portfolioJson;
+        portfolioJson["portfolioId"] = portfolio.portfolioId;
+        portfolioJson["studentCode"] = portfolio.studentCode;
+        portfolioJson["measureCode"] = portfolio.measureCode;
+        portfolioJson["date"] = portfolio.date;
+        portfolioJson["passportSeries"] = portfolio.passportSeries;
+        portfolioJson["passportNumber"] = portfolio.passportNumber;
+        j.push_back(portfolioJson);
+    }
+    
+    json response;
+    response["success"] = true;
+    response["data"] = j;
+    return createJsonResponse(response.dump());
+}
+
+std::string ApiService::getEventsJson(const std::string& sessionToken) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto events = dbService.getEvents();
+    json j = json::array();
+    
+    for (const auto& event : events) {
+        json eventJson;
+        eventJson["eventId"] = event.eventId;
+        eventJson["eventCategory"] = event.eventCategory;
+        eventJson["eventType"] = event.eventType;
+        eventJson["startDate"] = event.startDate;
+        eventJson["endDate"] = event.endDate;
+        eventJson["location"] = event.location;
+        eventJson["lore"] = event.lore;
+        j.push_back(eventJson);
     }
     
     json response;
