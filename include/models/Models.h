@@ -38,8 +38,6 @@ struct User {
     std::string lastName;
     std::string middleName;
     std::string phoneNumber;
-    std::string createdAt;
-    std::string updatedAt;
 };
 
 struct Specialization {

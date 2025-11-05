@@ -68,6 +68,8 @@ public:
     bool start();
     void stop();
     
+    std::string processRequestFromRaw(const std::string& rawRequest);
+
     // Authentication
     std::string handleRegister(const std::string& body);
     std::string handleLogin(const std::string& body);
