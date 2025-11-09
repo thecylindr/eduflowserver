@@ -1,5 +1,3 @@
-// [Замените код в ApiServiceGetters.cpp]
-
 #include "api/ApiService.h"
 #include "json.hpp"
 #include <mutex>
@@ -34,37 +32,40 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
         return createJsonResponse(errorResponse.dump(), 404);
     }
     
-    // Логируем данные для отладки
-    std::cout << "📊 Данные пользователя из БД:" << std::endl;
-    std::cout << "   ID: " << user.userId << std::endl;
-    std::cout << "   Логин: '" << user.login << "'" << std::endl;
-    std::cout << "   Email: '" << user.email << "'" << std::endl;
-    std::cout << "   Имя: '" << user.firstName << "'" << std::endl;
-    std::cout << "   Фамилия: '" << user.lastName << "'" << std::endl;
-    std::cout << "   Отчество: '" << user.middleName << "'" << std::endl;
-    std::cout << "   Телефон: '" << user.phoneNumber << "'" << std::endl;
-    
-    // Получаем сессии
-    std::lock_guard<std::mutex> sessionsLock(sessionsMutex);
+    // Получаем ВСЕ сессии пользователя из базы данных
+    auto userSessions = dbService.getSessionsByUserId(userId);
     json sessionsArray = json::array();
     auto now = std::chrono::system_clock::now();
     
-    for (const auto& [token, session] : sessions) {
-        if (session.userId == userId) {
-            auto age = std::chrono::duration_cast<std::chrono::hours>(now - session.createdAt);
-            auto inactive = std::chrono::duration_cast<std::chrono::minutes>(now - session.lastActivity);
-            
-            json sessionJson;
-            sessionJson["token"] = token;
-            sessionJson["email"] = session.email;
-            sessionJson["createdAt"] = std::chrono::duration_cast<std::chrono::seconds>(session.createdAt.time_since_epoch()).count();
-            sessionJson["lastActivity"] = std::chrono::duration_cast<std::chrono::seconds>(session.lastActivity.time_since_epoch()).count();
-            sessionJson["ageHours"] = age.count();
-            sessionJson["inactiveMinutes"] = inactive.count();
-            sessionJson["isCurrent"] = (token == sessionToken);
-            
-            sessionsArray.push_back(sessionJson);
-        }
+    std::cout << "📊 Загружено сессий из БД: " << userSessions.size() << std::endl;
+    
+    for (const auto& session : userSessions) {
+        if (now > session.expiresAt) continue;
+        
+        auto age = std::chrono::duration_cast<std::chrono::hours>(now - session.createdAt);
+        auto inactive = std::chrono::duration_cast<std::chrono::minutes>(now - session.lastActivity);
+        
+        // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ КАЖДОЙ СЕССИИ
+        std::cout << "🔍 Сессия DETAIL - Token: " << session.token.substr(0, 16) << "..."
+                  << ", OS: '" << session.userOS << "'"
+                  << ", IP: '" << session.ipAddress << "'"
+                  << ", UserId: " << session.userId 
+                  << ", Email: " << session.email << std::endl;
+        
+        json sessionJson;
+        sessionJson["token"] = session.token;
+        sessionJson["email"] = session.email;
+        sessionJson["userOS"] = session.userOS;
+        sessionJson["ipAddress"] = session.ipAddress;
+        sessionJson["createdAt"] = std::chrono::duration_cast<std::chrono::seconds>(
+            session.createdAt.time_since_epoch()).count();
+        sessionJson["lastActivity"] = std::chrono::duration_cast<std::chrono::seconds>(
+            session.lastActivity.time_since_epoch()).count();
+        sessionJson["ageHours"] = age.count();
+        sessionJson["inactiveMinutes"] = inactive.count();
+        sessionJson["isCurrent"] = (session.token == sessionToken);
+        
+        sessionsArray.push_back(sessionJson);
     }
     
     // Формируем ответ с реальными данными
@@ -83,6 +84,7 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
     response["data"] = userJson;
     
     std::cout << "✅ Profile data sent for user: " << user.login << std::endl;
+    std::cout << "📊 Sessions sent to client: " << sessionsArray.size() << std::endl;
     
     return createJsonResponse(response.dump());
 }
@@ -249,61 +251,56 @@ std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::
     return createJsonResponse(response.dump());
 }
 
-std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
+std::string ApiService::getEventCategoriesJson(const std::string& sessionToken) {
+    std::cout << "📂 Получение списка категорий событий..." << std::endl;
+    
     if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
+        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
     }
     
-    std::lock_guard<std::mutex> lock(dbMutex);
-    auto portfolios = dbService.getPortfolios();
-    json j = json::array();
-    
-    for (const auto& portfolio : portfolios) {
-        json portfolioJson;
-        portfolioJson["portfolioId"] = portfolio.portfolioId;
-        portfolioJson["studentCode"] = portfolio.studentCode;
-        portfolioJson["measureCode"] = portfolio.measureCode;
-        portfolioJson["date"] = portfolio.date;
-        portfolioJson["passportSeries"] = portfolio.passportSeries;
-        portfolioJson["passportNumber"] = portfolio.passportNumber;
-        j.push_back(portfolioJson);
-    }
-    
+    auto categories = dbService.getEventCategories();
     json response;
     response["success"] = true;
-    response["data"] = j;
+    response["data"] = json::array();
+    
+    for (const auto& category : categories) {
+        json categoryJson;
+        categoryJson["event_category_id"] = category.eventCategoryId;
+        categoryJson["name"] = category.name;
+        categoryJson["description"] = category.description;
+        
+        response["data"].push_back(categoryJson);
+    }
+    
     return createJsonResponse(response.dump());
 }
 
-std::string ApiService::getEventsJson(const std::string& sessionToken) {
+std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
+    std::cout << "📋 Получение списка портфолио..." << std::endl;
+    
     if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
+        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
     }
     
-    std::lock_guard<std::mutex> lock(dbMutex);
-    auto events = dbService.getEvents();
-    json j = json::array();
-    
-    for (const auto& event : events) {
-        json eventJson;
-        eventJson["eventId"] = event.eventId;
-        eventJson["eventCategory"] = event.eventCategory;
-        eventJson["eventType"] = event.eventType;
-        eventJson["startDate"] = event.startDate;
-        eventJson["endDate"] = event.endDate;
-        eventJson["location"] = event.location;
-        eventJson["lore"] = event.lore;
-        j.push_back(eventJson);
-    }
-    
+    auto portfolios = dbService.getPortfolios();
     json response;
     response["success"] = true;
-    response["data"] = j;
+    response["data"] = json::array();
+    
+    for (const auto& portfolio : portfolios) {
+        json portfolioJson;
+        portfolioJson["portfolio_id"] = portfolio.portfolioId;
+        portfolioJson["student_code"] = portfolio.studentCode;
+        portfolioJson["student_name"] = portfolio.studentName;
+        portfolioJson["measure_code"] = portfolio.measureCode;
+        portfolioJson["date"] = portfolio.date;
+        portfolioJson["passport_series"] = portfolio.passportSeries;
+        portfolioJson["passport_number"] = portfolio.passportNumber;
+        portfolioJson["description"] = portfolio.description;
+        portfolioJson["file_path"] = portfolio.filePath;
+        
+        response["data"].push_back(portfolioJson);
+    }
+    
     return createJsonResponse(response.dump());
 }

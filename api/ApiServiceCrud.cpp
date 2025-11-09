@@ -581,78 +581,34 @@ std::string ApiService::handleDeleteGroup(int groupId, const std::string& sessio
     }
 }
 
-std::string ApiService::handleAddPortfolio(const std::string& body, const std::string& sessionToken) {
+std::string ApiService::getEventsJson(const std::string& sessionToken) {
+    std::cout << "📅 Получение списка событий..." << std::endl;
+    
     if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
+        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
     }
     
-    try {
-        json j = json::parse(body);
-        StudentPortfolio portfolio;
+    auto events = dbService.getEvents();
+    json response;
+    response["success"] = true;
+    response["data"] = json::array();
+    
+    for (const auto& event : events) {
+        json eventJson;
+        eventJson["event_id"] = event.eventId;
+        eventJson["event_category"] = event.eventCategory;
+        eventJson["category_name"] = event.categoryName;
+        eventJson["event_type"] = event.eventType;
+        eventJson["start_date"] = event.startDate;
+        eventJson["end_date"] = event.endDate;
+        eventJson["location"] = event.location;
+        eventJson["lore"] = event.lore;
+        eventJson["max_participants"] = event.maxParticipants;
+        eventJson["current_participants"] = event.currentParticipants;
+        eventJson["status"] = event.status;
         
-        portfolio.studentCode = j["student_code"];
-        portfolio.measureCode = j["measure_code"];
-        portfolio.date = j["date"];
-        portfolio.passportSeries = j.value("passport_series", "");
-        portfolio.passportNumber = j.value("passport_number", "");
-        
-        if (dbService.addPortfolio(portfolio)) {
-            json response;
-            response["success"] = true;
-            response["message"] = "Portfolio item added successfully";
-            return createJsonResponse(response.dump(), 201);
-        } else {
-            json errorResponse;
-            errorResponse["success"] = false;
-            errorResponse["error"] = "Failed to add portfolio item";
-            return createJsonResponse(errorResponse.dump(), 500);
-        }
-    } catch (const std::exception& e) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Invalid request format";
-        return createJsonResponse(errorResponse.dump(), 400);
-    }
-}
-
-std::string ApiService::handleAddEvent(const std::string& body, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
+        response["data"].push_back(eventJson);
     }
     
-    try {
-        json j = json::parse(body);
-        Event event;
-        
-        event.eventId = j["event_id"];
-        event.eventCategory = j["event_category"];
-        event.eventType = j["event_type"];
-        event.startDate = j["start_date"];
-        event.endDate = j["end_date"];
-        event.location = j.value("location", "");
-        event.lore = j.value("lore", "");
-        
-        if (dbService.addEvent(event)) {
-            json response;
-            response["success"] = true;
-            response["message"] = "Event added successfully";
-            return createJsonResponse(response.dump(), 201);
-        } else {
-            json errorResponse;
-            errorResponse["success"] = false;
-            errorResponse["error"] = "Failed to add event";
-            return createJsonResponse(errorResponse.dump(), 500);
-        }
-    } catch (const std::exception& e) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Invalid request format";
-        return createJsonResponse(errorResponse.dump(), 400);
-    }
+    return createJsonResponse(response.dump());
 }

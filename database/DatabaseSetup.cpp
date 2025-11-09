@@ -118,7 +118,17 @@ bool DatabaseService::setupDatabase() {
         "password_hash TEXT NOT NULL,"
         "last_name VARCHAR(100) NOT NULL,"
         "first_name VARCHAR(100) NOT NULL,"
-        "middle_name VARCHAR(100))"
+        "middle_name VARCHAR(100))",
+
+        "CREATE TABLE IF NOT EXISTS sessions ("
+        "session_id SERIAL PRIMARY KEY,"
+        "token VARCHAR(64) UNIQUE NOT NULL,"
+        "user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,"
+        "created_at TIMESTAMP NOT NULL,"
+        "last_activity TIMESTAMP NOT NULL,"
+        "ip_address VARCHAR(45),"
+        "user_agent TEXT,"
+        "expires_at TIMESTAMP NOT NULL);"
     };
     
     for (const auto& sql : sqlCommands) {

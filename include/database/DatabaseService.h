@@ -70,6 +70,32 @@ public:
     // Get current config
     DatabaseConfig getCurrentConfig() const { return currentConfig; }
 
+    // Sessions management
+    bool addSession(const Session& session);
+    bool createSession(const Session& session) { return addSession(session); } // Алиас для обратной совместимости
+    Session getSessionByToken(const std::string& token);
+    bool updateSessionLastActivity(const std::string& token, 
+                                  const std::chrono::system_clock::time_point& newLastActivity,
+                                  const std::chrono::system_clock::time_point& newExpiresAt);
+    bool deleteSession(const std::string& token);
+    std::vector<Session> getSessionsByUserId(const std::string& userId);
+    std::vector<Session> getAllActiveSessions();
+    bool deleteExpiredSessions();
+
+    bool updatePortfolio(const StudentPortfolio& portfolio);
+    bool deletePortfolio(int portfolioId);
+    StudentPortfolio getPortfolioById(int portfolioId);
+    
+    bool updateEvent(const Event& event);
+    bool deleteEvent(int eventId);
+    Event getEventById(int eventId);
+    
+    std::vector<EventCategory> getEventCategories();
+    bool addEventCategory(const EventCategory& category);
+    bool updateEventCategory(const EventCategory& category);
+    bool deleteEventCategory(int eventCategoryId);
+    EventCategory getEventCategoryById(int eventCategoryId);
+
 private:
     void executeSQL(const std::string& sql);
     

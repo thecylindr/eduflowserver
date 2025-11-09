@@ -53,9 +53,9 @@ struct Teacher {
     int experience;
     std::string email;
     std::string phoneNumber;
-    std::string specialization;  // Строка для отображения
-    std::vector<Specialization> specializations;  // Для хранения списка специализаций
-    int specializationCode;  // Добавьте эту строку - код специализации
+    std::string specialization;
+    std::vector<Specialization> specializations;
+    int specializationCode;
 };
 
 struct Student {
@@ -77,6 +77,24 @@ struct StudentGroup {
     int teacherId;
 };
 
+struct Session {
+    int sessionId;
+    std::string token;
+    std::string userId;
+    std::string email;
+    std::chrono::system_clock::time_point createdAt;
+    std::chrono::system_clock::time_point lastActivity;
+    std::chrono::system_clock::time_point expiresAt;
+    std::string ipAddress;
+    std::string userOS;
+};
+
+struct PasswordResetToken {
+    std::string email;
+    std::chrono::system_clock::time_point createdAt;
+};
+
+// ЕДИНСТВЕННОЕ ОПРЕДЕЛЕНИЕ StudentPortfolio
 struct StudentPortfolio {
     int portfolioId;
     int studentCode;
@@ -84,28 +102,30 @@ struct StudentPortfolio {
     std::string date;
     std::string passportSeries;
     std::string passportNumber;
+    std::string description;
+    std::string filePath;
+    std::string studentName;
 };
 
+// ЕДИНСТВЕННОЕ ОПРЕДЕЛЕНИЕ Event
 struct Event {
     int eventId;
     std::string eventCategory;
+    std::string categoryName;
     std::string eventType;
     std::string startDate;
     std::string endDate;
     std::string location;
     std::string lore;
+    int maxParticipants;
+    int currentParticipants;
+    std::string status;
 };
 
-struct Session {
-    std::string userId;
-    std::string email;
-    std::chrono::system_clock::time_point createdAt;
-    std::chrono::system_clock::time_point lastActivity;
-};
-
-struct PasswordResetToken {
-    std::string email;
-    std::chrono::system_clock::time_point createdAt;
+struct EventCategory {
+    int eventCategoryId;
+    std::string name;
+    std::string description;
 };
 
 #endif

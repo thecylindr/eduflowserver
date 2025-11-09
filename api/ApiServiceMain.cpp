@@ -12,20 +12,20 @@
 #include <cctype>
 
 #ifndef _WIN32
-    #include <fcntl.h>
-    #include <errno.h>
-    #include <arpa/inet.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <arpa/inet.h>
 #endif
 
 #ifdef _WIN32
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-    #include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
 #endif
 
 using json = nlohmann::json;
@@ -73,12 +73,13 @@ void logSuspiciousActivity(const std::string& request, const std::string& client
     logfile.close();
 }
 
-ApiService::ApiService(DatabaseService& dbService) 
-    : dbService(dbService), 
+ApiService::ApiService(DatabaseService& dbService)
+    : dbService(dbService),
       running(false),
       serverSocket(INVALID_SOCKET_VAL) {
     std::cout << "🔧 Initializing ApiService..." << std::endl;
     initializeNetwork();
+    loadSessionsFromDB();
 }
 
 ApiService::~ApiService() {
@@ -109,8 +110,6 @@ bool ApiService::start() {
         std::cout << "❌ Не удалось загрузить конфигурацию API" << std::endl;
         return false;
     }
-    
-    loadSessionsFromFile();
     
     // Создаем сокет
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -170,40 +169,30 @@ bool ApiService::start() {
         std::cout << "🌐 Сервер будет слушать на всех интерфейсах" << std::endl;
     } else {
         // Пробуем разные варианты для localhost
-        if (apiConfig.host == "localhost") {
+        if (apiConfig.host == "localhost" || apiConfig.host == "127.0.0.1") {
             serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-            if (serverAddr.sin_addr.s_addr == INADDR_NONE) {
-                serverAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            }
-            std::cout << "🏠 Сервер будет слушать на localhost (127.0.0.1)" << std::endl;
         } else {
             serverAddr.sin_addr.s_addr = inet_addr(apiConfig.host.c_str());
-            if (serverAddr.sin_addr.s_addr == INADDR_NONE) {
-                std::cout << "❌ Неверный адрес хоста: " << apiConfig.host << std::endl;
-                CLOSE_SOCKET(serverSocket);
-                return false;
-            }
-            std::cout << "🌐 Сервер будет слушать на " << apiConfig.host << std::endl;
         }
     }
     
     serverAddr.sin_port = htons(apiConfig.port);
     
-    // Привязываем сокет
-    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        std::cout << "❌ Не удалось привязать сокет к " << apiConfig.host << ":" << apiConfig.port << std::endl;
+    // Биндим сокет
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        std::cout << "❌ Не удалось забиндить сокет на " << apiConfig.host << ":" << apiConfig.port << std::endl;
 #ifdef _WIN32
-        std::cout << "   Код ошибки Windows: " << WSAGetLastError() << std::endl;
+        std::cout << "Ошибка: " << WSAGetLastError() << std::endl;
 #else
-        std::cout << "   Код ошибки: " << errno << std::endl;
+        std::cout << "Ошибка: " << strerror(errno) << std::endl;
 #endif
         CLOSE_SOCKET(serverSocket);
         return false;
     }
     
-    // Начинаем слушать
+    // Слушаем
     if (listen(serverSocket, SOMAXCONN) < 0) {
-        std::cout << "❌ Не удалось начать прослушивание на сокете" << std::endl;
+        std::cout << "❌ Не удалось начать прослушивание" << std::endl;
         CLOSE_SOCKET(serverSocket);
         return false;
     }
@@ -212,269 +201,209 @@ bool ApiService::start() {
     serverThread = std::thread(&ApiService::runServer, this);
     cleanupThread = std::thread(&ApiService::runCleanup, this);
     
-    std::cout << "✅ API сервер успешно запущен!" << std::endl;
-    std::cout << "📍 Адрес: " << apiConfig.host << ":" << apiConfig.port << std::endl;
-    std::cout << "⏰ Таймаут сессии: " << apiConfig.sessionTimeoutHours << " часов" << std::endl;
-    std::cout << "💻 Платформа: " << 
-#ifdef _WIN32
-        "Windows"
-#else
-        "Unix/Linux"
-#endif
-        << std::endl;
-    
+    std::cout << "🚀 Сервер запущен на " << apiConfig.host << ":" << apiConfig.port << std::endl;
     return true;
 }
 
-void ApiService::runCleanup() {
-    while (running) {
-        std::this_thread::sleep_for(std::chrono::hours(1));
-        cleanupExpiredSessions();
-        saveSessionsToFile();
-    }
-}
-
 void ApiService::stop() {
-    if (!running) return;
-    
     running = false;
-    
-    // Сохраняем сессии перед остановкой
-    saveSessionsToFile();
-    
-    // Останавливаем cleanup thread
-    if (cleanupThread.joinable()) {
-        cleanupThread.join();
-    }
-    
-    // Закрываем серверный сокет для выхода из accept()
     if (serverSocket != INVALID_SOCKET_VAL) {
         CLOSE_SOCKET(serverSocket);
-        serverSocket = INVALID_SOCKET_VAL;
     }
-    
-    // Ждем завершения серверного потока
     if (serverThread.joinable()) {
         serverThread.join();
     }
-    
-    std::cout << "API Server stopped" << std::endl;
+    if (cleanupThread.joinable()) {
+        cleanupThread.join();
+    }
 }
 
 void ApiService::runServer() {
-    std::cout << "🚀 Серверный поток запущен, ожидание подключений..." << std::endl;
-    
     while (running) {
         sockaddr_in clientAddr;
-#ifdef _WIN32
-        int clientAddrLen = sizeof(clientAddr);
-#else
-        socklen_t clientAddrLen = sizeof(clientAddr);
-#endif
-        
-        SOCKET_TYPE clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrLen);
-        
-        if (!running) break;
+        socklen_t addrLen = sizeof(clientAddr);
+        SOCKET_TYPE clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &addrLen);
         
         if (clientSocket == INVALID_SOCKET_VAL) {
 #ifdef _WIN32
-            int error = WSAGetLastError();
-            if (error == WSAEWOULDBLOCK) {
-                // Нет ожидающих подключений - это нормально
+            int err = WSAGetLastError();
+            if (err == WSAEWOULDBLOCK) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 continue;
-            } else if (error != WSAECONNRESET) {
-                std::cout << "❌ Accept failed with error: " << error << std::endl;
             }
 #else
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 continue;
-            } else if (errno != ECONNABORTED) {
-                std::cout << "❌ Accept failed with error: " << errno << std::endl;
             }
 #endif
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
         
-        // Получаем информацию о клиенте для логов
-        char clientIP[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIP, INET_ADDRSTRLEN);
-        std::cout << "🔗 Новое подключение от " << clientIP << ":" << ntohs(clientAddr.sin_port) << std::endl;
+        // Настраиваем клиентский сокет
+#ifdef _WIN32
+        u_long mode = 1;
+        ioctlsocket(clientSocket, FIONBIO, &mode);
+#else
+        int flags = fcntl(clientSocket, F_GETFL, 0);
+        fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK);
+#endif
         
-        // Обрабатываем клиента в отдельном потоке
-        std::thread clientThread(&ApiService::handleClient, this, clientSocket);
-        clientThread.detach();
+        handleClient(clientSocket);
     }
-    
-    std::cout << "🛑 Серверный поток завершен" << std::endl;
+}
+
+std::string ApiService::getClientInfo(SOCKET_TYPE clientSocket) {
+#ifdef _WIN32
+    sockaddr_in clientAddr;
+    int addrLen = sizeof(clientAddr);
+    if (getpeername(clientSocket, (sockaddr*)&clientAddr, &addrLen) == 0) {
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &clientAddr.sin_addr, ip, INET_ADDRSTRLEN);
+        return std::string(ip);
+    } else {
+        int error = WSAGetLastError();
+        std::cout << "❌ Ошибка получения IP клиента: " << error << std::endl;
+        return "unknown";
+    }
+#else
+    sockaddr_in clientAddr;
+    socklen_t addrLen = sizeof(clientAddr);
+    if (getpeername(clientSocket, (sockaddr*)&clientAddr, &addrLen) == 0) {
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &clientAddr.sin_addr, ip, INET_ADDRSTRLEN);
+        return std::string(ip);
+    } else {
+        std::cout << "❌ Ошибка получения IP клиента: " << strerror(errno) << std::endl;
+        return "unknown";
+    }
+#endif
 }
 
 void ApiService::handleClient(SOCKET_TYPE clientSocket) {
-    // ПЕРЕКЛЮЧАЕМ КЛИЕНТСКИЙ СОКЕТ В БЛОКИРУЮЩИЙ РЕЖИМ ДЛЯ WINDOWS
-#ifdef _WIN32
-    u_long mode = 0; // 0 = блокирующий режим
-    if (ioctlsocket(clientSocket, FIONBIO, &mode) != 0) {
-        std::cout << "❌ Failed to set blocking mode for client socket" << std::endl;
-        CLOSE_SOCKET(clientSocket);
-        return;
-    }
+    std::string clientIP = getClientInfo(clientSocket);
+    std::cout << "🔗 Новое подключение от IP: " << clientIP << std::endl;
     
-    // Устанавливаем разумные таймауты для Windows
-    int timeout = 30000; // 30 секунд
-    setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-    setsockopt(clientSocket, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout));
-#else
-    struct timeval timeout;
-    timeout.tv_sec = 30;
-    timeout.tv_usec = 0;
-    setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    setsockopt(clientSocket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-#endif
+    std::string rawRequest;
+    char buffer[4096];
+    int bytesReceived;
+    auto startTime = std::chrono::steady_clock::now();
 
-    std::vector<char> buffer(8192); // Уменьшаем размер буфера
-    std::string request;
-    
-    // Читаем данные порциями до получения полного HTTP запроса
-    bool requestComplete = false;
-    size_t totalBytesRead = 0;
-    const size_t MAX_REQUEST_SIZE = 1024 * 1024; // 1MB максимум
-    
-    while (!requestComplete && totalBytesRead < MAX_REQUEST_SIZE) {
-#ifdef _WIN32
-        int bytesReceived = recv(clientSocket, buffer.data(), buffer.size() - 1, 0);
-#else
-        int bytesReceived = read(clientSocket, buffer.data(), buffer.size() - 1);
-#endif
+    // Увеличиваем таймаут и улучшаем чтение
+    while (true) {
+        memset(buffer, 0, sizeof(buffer));  // Очищаем буфер
+        bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);  // Оставляем место для нуль-терминатора
         
         if (bytesReceived > 0) {
-            buffer[bytesReceived] = '\0';
-            request.append(buffer.data(), bytesReceived);
-            totalBytesRead += bytesReceived;
+            rawRequest.append(buffer, bytesReceived);
             
-            // Проверяем, получен ли полный HTTP запрос
-            size_t headerEnd = request.find("\r\n\r\n");
-            if (headerEnd != std::string::npos) {
-                // Если есть Content-Length, проверяем получено ли все тело
-                size_t contentLengthHeader = request.find("Content-Length: ");
-                if (contentLengthHeader != std::string::npos) {
-                    size_t contentLengthEnd = request.find("\r\n", contentLengthHeader);
-                    std::string contentLengthStr = request.substr(
-                        contentLengthHeader + 16, contentLengthEnd - contentLengthHeader - 16);
-                    
+            // Проверяем конец заголовков
+            if (rawRequest.find("\r\n\r\n") != std::string::npos) {
+                // Если есть Content-Length, читаем тело
+                size_t headersEnd = rawRequest.find("\r\n\r\n");
+                std::string headers = rawRequest.substr(0, headersEnd);
+                
+                // Ищем Content-Length
+                size_t clPos = headers.find("Content-Length:");
+                if (clPos != std::string::npos) {
+                    size_t clEnd = headers.find("\r\n", clPos);
+                    std::string clStr = headers.substr(clPos + 15, clEnd - clPos - 15);
                     try {
-                        size_t contentLength = std::stoul(contentLengthStr);
-                        size_t bodyStart = headerEnd + 4;
-                        if (request.length() >= bodyStart + contentLength) {
-                            requestComplete = true;
+                        size_t contentLength = std::stoul(clStr);
+                        size_t bodyStart = headersEnd + 4;
+                        if (rawRequest.length() - bodyStart >= contentLength) {
+                            break;  // Все данные получены
                         }
                     } catch (...) {
-                        // Если не можем распарсить Content-Length, считаем запрос полным
-                        requestComplete = true;
+                        // Если не удалось распарсить Content-Length, считаем что заголовки закончились
+                        break;
                     }
                 } else {
-                    // Нет тела - запрос полный
-                    requestComplete = true;
+                    // Нет тела - запрос завершен
+                    break;
                 }
             }
-        } 
-        else if (bytesReceived == 0) {
-            // Соединение закрыто клиентом
+        } else if (bytesReceived == 0) {
+            std::cout << "🔌 Клиент отключился: " << clientIP << std::endl;
             break;
-        } 
-        else {
-            // Ошибка чтения
+        } else {
 #ifdef _WIN32
-            int error = WSAGetLastError();
-            if (error == WSAETIMEDOUT) {
-                std::cout << "⏰ Таймаут при чтении от клиента" << std::endl;
-            } else if (error != WSAECONNRESET) {
-                std::cout << "❌ Ошибка recv: " << error << std::endl;
-            }
+            if (WSAGetLastError() == WSAEWOULDBLOCK) {
 #else
-            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != ECONNRESET) {
-                std::cout << "❌ Ошибка read: " << errno << std::endl;
-            }
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
 #endif
+                auto now = std::chrono::steady_clock::now();
+                if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 30) {  // Увеличили таймаут
+                    std::cout << "⏰ Таймаут чтения от клиента: " << clientIP << std::endl;
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Увеличили задержку
+                continue;
+            }
+            std::cout << "❌ Ошибка чтения от клиента " << clientIP << ": ";
+#ifdef _WIN32
+            std::cout << WSAGetLastError();
+#else
+            std::cout << strerror(errno);
+#endif
+            std::cout << std::endl;
             break;
         }
-        
-        // Небольшая пауза между чтениями
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    
-    if (request.empty()) {
+
+    if (rawRequest.empty()) {
+        std::cout << "📭 Пустой запрос от клиента: " << clientIP << std::endl;
         CLOSE_SOCKET(clientSocket);
         return;
     }
+
+    std::cout << "📨 Получен запрос от " << clientIP << ", размер: " << rawRequest.length() << " байт" << std::endl;
     
     // Обрабатываем запрос
-    std::string response = processRequestFromRaw(request);
+    std::string response = processRequestFromRaw(rawRequest, clientIP);
     
     // Отправляем ответ
-    if (!response.empty()) {
-#ifdef _WIN32
-        int totalSent = 0;
-        const char* responseData = response.c_str();
-        int responseLength = response.length();
-        
-        while (totalSent < responseLength) {
-            int sent = send(clientSocket, responseData + totalSent, responseLength - totalSent, 0);
-            if (sent == SOCKET_ERROR) {
-                int error = WSAGetLastError();
-                if (error == WSAETIMEDOUT) {
-                    std::cout << "⏰ Таймаут при отправке клиенту" << std::endl;
-                    break;
-                } else if (error != WSAECONNRESET) {
-                    std::cout << "❌ Ошибка send: " << error << std::endl;
-                }
-                break;
-            }
-            totalSent += sent;
+    int totalSent = 0;
+    const char* responseData = response.c_str();
+    size_t responseLength = response.length();
+    
+    while (totalSent < static_cast<int>(responseLength)) {
+        int bytesSent = send(clientSocket, responseData + totalSent, responseLength - totalSent, 0);
+        if (bytesSent <= 0) {
+            std::cout << "❌ Ошибка отправки ответа клиенту " << clientIP << std::endl;
+            break;
         }
-#else
-        int totalSent = 0;
-        const char* responseData = response.c_str();
-        int responseLength = response.length();
-        
-        while (totalSent < responseLength) {
-            int sent = write(clientSocket, responseData + totalSent, responseLength - totalSent);
-            if (sent < 0) {
-                if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EPIPE && errno != ECONNRESET) {
-                    std::cout << "❌ Ошибка write: " << errno << std::endl;
-                }
-                break;
-            }
-            totalSent += sent;
-        }
-#endif
+        totalSent += bytesSent;
     }
     
-    // Корректно закрываем соединение
-#ifdef _WIN32
-    shutdown(clientSocket, SD_BOTH);
-#else
-    shutdown(clientSocket, SHUT_RDWR);
-#endif
-    CLOSE_SOCKET(clientSocket);
+    if (totalSent > 0) {
+        std::cout << "📤 Ответ отправлен клиенту " << clientIP << ", размер: " << totalSent << " байт" << std::endl;
+    }
     
-    std::cout << "✅ Обработан запрос, закрыто соединение" << std::endl;
+    CLOSE_SOCKET(clientSocket);
+    std::cout << "🔌 Соединение с клиентом " << clientIP << " закрыто" << std::endl;
 }
 
-// ф-ия обработки сырого запроса - ТОЛЬКО ОДНА РЕАЛИЗАЦИЯ
-std::string ApiService::processRequestFromRaw(const std::string& rawRequest) {
+void ApiService::runCleanup() {
+    while (running) {
+        cleanupExpiredSessions();
+        dbService.deleteExpiredSessions();
+        std::this_thread::sleep_for(std::chrono::minutes(5));
+    }
+}
+
+std::string ApiService::processRequestFromRaw(const std::string& rawRequest, const std::string& clientIP) {
     // ПРОВЕРКА НА МИНИМАЛЬНО ВАЛИДНЫЙ HTTP ЗАПРОС
-    if (rawRequest.length() < 14) { // Минимум: "GET / HTTP/1.1"
-        std::cout << "❌ Слишком короткий запрос: " << rawRequest.length() << " байт" << std::endl;
-        logSuspiciousActivity(rawRequest, "Short request");
+    if (rawRequest.length() < 14) {
+        std::cout << "❌ Слишком короткий запрос от " << clientIP << ": " << rawRequest.length() << " байт" << std::endl;
+        logSuspiciousActivity(rawRequest, "Short request from IP: " + clientIP);
         return createJsonResponse("{\"success\": false, \"error\": \"Invalid HTTP request\"}", 400);
     }
     
     // ПРОВЕРКА НА БАЗОВЫЙ HTTP СИНТАКСИС
     if (rawRequest.find("HTTP/") == std::string::npos) {
-        std::cout << "❌ Не HTTP запрос" << std::endl;
-        logSuspiciousActivity(rawRequest, "Not HTTP protocol");
+        std::cout << "❌ Не HTTP запрос от " << clientIP << std::endl;
+        logSuspiciousActivity(rawRequest, "Not HTTP protocol from IP: " + clientIP);
         return createJsonResponse("{\"success\": false, \"error\": \"Invalid HTTP protocol\"}", 400);
     }
     
@@ -494,26 +423,26 @@ std::string ApiService::processRequestFromRaw(const std::string& rawRequest) {
         }
         
         if (!validMethod) {
-            std::cout << "❌ Неподдерживаемый HTTP метод: " << method << std::endl;
-            logSuspiciousActivity(rawRequest, "Invalid method: " + method);
+            std::cout << "❌ Неподдерживаемый HTTP метод от " << clientIP << ": " << method << std::endl;
+            logSuspiciousActivity(rawRequest, "Invalid method from IP: " + clientIP + " - " + method);
             return createJsonResponse("{\"success\": false, \"error\": \"Method not allowed\"}", 405);
         }
         
         // ВАЛИДАЦИЯ ПУТИ
         if (path.empty() || path[0] != '/') {
-            std::cout << "❌ Неверный путь: " << path << std::endl;
-            logSuspiciousActivity(rawRequest, "Invalid path: " + path);
+            std::cout << "❌ Неверный путь от " << clientIP << ": " << path << std::endl;
+            logSuspiciousActivity(rawRequest, "Invalid path from IP: " + clientIP + " - " + path);
             return createJsonResponse("{\"success\": false, \"error\": \"Invalid path\"}", 400);
         }
         
         // ВАЛИДАЦИЯ ПРОТОКОЛА
         if (protocol != "HTTP/1.0" && protocol != "HTTP/1.1") {
-            std::cout << "❌ Неподдерживаемый протокол: " << protocol << std::endl;
-            logSuspiciousActivity(rawRequest, "Invalid protocol: " + protocol);
+            std::cout << "❌ Неподдерживаемый протокол от " << clientIP << ": " << protocol << std::endl;
+            logSuspiciousActivity(rawRequest, "Invalid protocol from IP: " + clientIP + " - " + protocol);
             return createJsonResponse("{\"success\": false, \"error\": \"Unsupported HTTP version\"}", 505);
         }
         
-        std::cout << "✅ Валидный HTTP запрос: " << method << " " << path << " " << protocol << std::endl;
+        std::cout << "✅ Валидный HTTP запрос от " << clientIP << ": " << method << " " << path << " " << protocol << std::endl;
         
         // Извлекаем заголовки и тело
         std::unordered_map<std::string, std::string> headers;
@@ -524,6 +453,7 @@ std::string ApiService::processRequestFromRaw(const std::string& rawRequest) {
         std::getline(iss, line);
         
         // Читаем заголовки
+        std::string userOS = "unknown";
         while (std::getline(iss, line)) {
             if (line.empty() || line == "\r") break;
             
@@ -551,22 +481,26 @@ std::string ApiService::processRequestFromRaw(const std::string& rawRequest) {
                 if (validHeader) {
                     std::transform(key.begin(), key.end(), key.begin(), ::tolower);
                     headers[key] = value;
+                    
+                    // Сохраняем OS
+                    if (key == "user-os") {
+                        userOS = value;
+                    }
                 } else {
-                    std::cout << "⚠️ Пропущен невалидный заголовок: " << key << std::endl;
+                    std::cout << "⚠️ Пропущен невалидный заголовок от " << clientIP << ": " << key << std::endl;
                 }
             }
         }
         
-        // Читаем тело с ВАЛИДАЦИЕЙ
-        if (method == "POST" || method == "PUT") {
+        // Читаем тело для POST, PUT и DELETE запросов
+        if (method == "POST" || method == "PUT" || method == "DELETE") {
             std::string contentLengthStr = headers["content-length"];
             if (!contentLengthStr.empty()) {
                 try {
                     size_t contentLength = std::stoul(contentLengthStr);
                     
-                    // ПРОВЕРКА РАЗМЕРА ТЕЛА
-                    if (contentLength > 10 * 1024 * 1024) { // 10MB максимум
-                        std::cout << "❌ Слишком большое тело запроса: " << contentLength << " байт" << std::endl;
+                    if (contentLength > 10 * 1024 * 1024) {
+                        std::cout << "❌ Слишком большое тело запроса от " << clientIP << ": " << contentLength << " байт" << std::endl;
                         return createJsonResponse("{\"success\": false, \"error\": \"Request body too large\"}", 413);
                     }
                     
@@ -574,17 +508,27 @@ std::string ApiService::processRequestFromRaw(const std::string& rawRequest) {
                         body.resize(contentLength);
                         iss.read(&body[0], contentLength);
                         
-                        // ПРОВЕРКА ЧТО ПРОЧИТАЛИ ВСЕ БАЙТЫ
                         size_t bytesRead = iss.gcount();
                         if (bytesRead != contentLength) {
-                            std::cout << "❌ Несоответствие размера тела: ожидалось " << contentLength 
-                                      << ", получено " << bytesRead << std::endl;
+                            std::cout << "❌ Несоответствие размера тела от " << clientIP 
+                                      << ": ожидалось " << contentLength << ", получено " << bytesRead << std::endl;
                             return createJsonResponse("{\"success\": false, \"error\": \"Incomplete request body\"}", 400);
                         }
+                        
+                        std::cout << "📦 Тело запроса прочитано: " << body.length() << " байт" << std::endl;
+                        std::cout << "📦 Содержимое тела: " << body << std::endl;
+                    } else {
+                        std::cout << "⚠️ Content-Length = 0 для " << method << " запроса" << std::endl;
                     }
                 } catch (const std::exception& e) {
-                    std::cout << "❌ Ошибка парсинга content-length: " << e.what() << std::endl;
+                    std::cout << "❌ Ошибка парсинга content-length от " << clientIP << ": " << e.what() << std::endl;
                     return createJsonResponse("{\"success\": false, \"error\": \"Invalid Content-Length\"}", 400);
+                }
+            } else {
+                std::cout << "❌ " << method << " запрос без Content-Length, но ожидается тело" << std::endl;
+                // Для DELETE запросов с телом Content-Length обязателен
+                if (!body.empty()) {
+                    return createJsonResponse("{\"success\": false, \"error\": \"Content-Length header required\"}", 411);
                 }
             }
         }
@@ -598,55 +542,82 @@ std::string ApiService::processRequestFromRaw(const std::string& rawRequest) {
             // ВАЛИДАЦИЯ ФОРМАТА AUTHORIZATION HEADER
             if (authHeader.find("Bearer ") == 0) {
                 sessionToken = authHeader.substr(7);
-                // Проверяем что токен не пустой после Bearer
                 if (sessionToken.empty()) {
-                    std::cout << "⚠️ Пустой токен после Bearer" << std::endl;
+                    std::cout << "⚠️ Пустой токен после Bearer от " << clientIP << std::endl;
+                } else {
+                    std::cout << "🔐 Токен получен от " << clientIP << ", длина: " << sessionToken.length() << std::endl;
                 }
             } else {
-                // Пробуем использовать как есть, но логируем
                 sessionToken = authHeader;
-                std::cout << "⚠️ Нестандартный Authorization header" << std::endl;
+                std::cout << "⚠️ Нестандартный Authorization header от " << clientIP << std::endl;
             }
             
             // ВАЛИДАЦИЯ ДЛИНЫ ТОКЕНА
             if (sessionToken.length() > 512) {
-                std::cout << "❌ Слишком длинный токен: " << sessionToken.length() << " символов" << std::endl;
+                std::cout << "❌ Слишком длинный токен от " << clientIP << ": " << sessionToken.length() << " символов" << std::endl;
                 return createJsonResponse("{\"success\": false, \"error\": \"Invalid token format\"}", 400);
             }
         }
         
-        // ОБРАБАТЫВАЕМ ЗАПРОС
-        std::string response = processRequest(method, path, body, sessionToken);
+        // Формируем clientInfo для передачи в processRequest
+        std::string clientInfo = "IP: " + clientIP + ", OS: " + userOS;
+        std::cout << "👤 ClientInfo: " << clientInfo << std::endl;
+        
+        // ОБРАБАТЫВАЕМ ЗАПРОС с передачей clientInfo
+        std::string response = processRequest(method, path, body, sessionToken, clientInfo);
         
         // ПРОВЕРКА ЧТО PROCESSREQUEST ВЕРНУЛ ВАЛИДНЫЙ ОТВЕТ
         if (response.empty()) {
-            std::cout << "❌ Пустой ответ от processRequest" << std::endl;
+            std::cout << "❌ Пустой ответ от processRequest для клиента " << clientIP << std::endl;
             return createJsonResponse("{\"success\": false, \"error\": \"Internal server error\"}", 500);
         }
         
         return response;
         
     } catch (const std::exception& e) {
-        std::cout << "💥 EXCEPTION в processRequestFromRaw: " << e.what() << std::endl;
-        logSuspiciousActivity(rawRequest, "Exception: " + std::string(e.what()));
+        std::cout << "💥 EXCEPTION в processRequestFromRaw для клиента " << clientIP << ": " << e.what() << std::endl;
+        logSuspiciousActivity(rawRequest, "Exception from IP: " + clientIP + " - " + std::string(e.what()));
         return createJsonResponse("{\"success\": false, \"error\": \"Internal server error\"}", 500);
     }
 }
 
 std::string ApiService::processRequest(const std::string& method, const std::string& path, 
-    const std::string& body, const std::string& sessionToken) {
+    const std::string& body, const std::string& sessionToken, const std::string& clientInfo) {
     
     // 🔒 РАСШИРЕННАЯ ВАЛИДАЦИЯ ЗАПРОСА
     
+    // Извлекаем IP и User-OS из clientInfo
+    std::string clientIP = "unknown";
+    std::string userOS = "unknown";
+    
+    size_t ipPos = clientInfo.find("IP: ");
+    size_t uaPos = clientInfo.find("OS: ");
+    
+    if (ipPos != std::string::npos) {
+        size_t ipEnd = clientInfo.find(",", ipPos);
+        if (ipEnd != std::string::npos) {
+            clientIP = clientInfo.substr(ipPos + 4, ipEnd - ipPos - 4);
+        } else {
+            // Если запятая не найдена, берем до конца строки
+            clientIP = clientInfo.substr(ipPos + 4);
+        }
+    }
+    if (uaPos != std::string::npos) {
+        // Исправляем смещение - "OS: " имеет длину 4 символа
+        userOS = clientInfo.substr(uaPos + 4);
+    }
+    
+    std::cout << "🔍 Обработка запроса от " << clientIP << " (" << userOS << ")" << std::endl;
+    
     // Валидация метода
     if (method != "GET" && method != "POST" && method != "PUT" && method != "DELETE" && method != "OPTIONS") {
-        std::cout << "🚨 Неподдерживаемый метод: " << method << std::endl;
+        std::cout << "🚨 Неподдерживаемый метод от " << clientIP << ": " << method << std::endl;
         return createJsonResponse("{\"success\": false, \"error\": \"Method not allowed\"}", 405);
     }
     
     // Валидация длины пути
     if (path.length() > 1000) {
-        std::cout << "🚨 Слишком длинный путь: " << path.length() << std::endl;
+        std::cout << "🚨 Слишком длинный путь от " << clientIP << ": " << path.length() << std::endl;
         return createJsonResponse("{\"success\": false, \"error\": \"Path too long\"}", 414);
     }
     
@@ -657,16 +628,16 @@ std::string ApiService::processRequest(const std::string& method, const std::str
         path.find("/./") != std::string::npos ||
         path.find("~") != std::string::npos ||
         path.find("%00") != std::string::npos) {
-        std::cout << "🚨 Blocked path traversal attempt: " << path << std::endl;
-        logSuspiciousActivity(path, "Path traversal attempt");
+        std::cout << "🚨 Blocked path traversal attempt от " << clientIP << ": " << path << std::endl;
+        logSuspiciousActivity(path, "Path traversal attempt from IP: " + clientIP);
         return createJsonResponse("{\"success\": false, \"error\": \"Invalid path\"}", 400);
     }
     
     // Проверка на бинарные данные в пути
     for (char c : path) {
         if (static_cast<unsigned char>(c) < 32 || static_cast<unsigned char>(c) > 126) {
-            std::cout << "🚨 Blocked request with binary data in path" << std::endl;
-            logSuspiciousActivity(path, "Binary data in path");
+            std::cout << "🚨 Blocked request with binary data in path от " << clientIP << std::endl;
+            logSuspiciousActivity(path, "Binary data in path from IP: " + clientIP);
             return createJsonResponse("{\"success\": false, \"error\": \"Invalid characters in path\"}", 400);
         }
     }
@@ -677,7 +648,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
             // Пробуем распарсить JSON для валидации
             json j = json::parse(body);
         } catch (const std::exception& e) {
-            std::cout << "❌ Невалидный JSON в теле запроса: " << e.what() << std::endl;
+            std::cout << "❌ Невалидный JSON в теле запроса от " << clientIP << ": " << e.what() << std::endl;
             return createJsonResponse("{\"success\": false, \"error\": \"Invalid JSON in request body\"}", 400);
         }
     }
@@ -689,20 +660,20 @@ std::string ApiService::processRequest(const std::string& method, const std::str
     std::regex specializationRegex("^/specializations/(\\d+)$");
     std::regex teacherSpecializationsRegex("^/teachers/(\\d+)/specializations$");
     std::regex teacherSpecializationRegex("^/teachers/(\\d+)/specializations/(\\d+)$");
+    std::regex sessionTokenRegex("^/sessions/([a-fA-F0-9]+)$");  // НОВЫЙ REGEX ДЛЯ СЕССИЙ
     std::smatch matches;
-
+    
     try {
-        std::cout << "🔄 Processing: " << method << " " << path << std::endl;
-
+        std::cout << "🔄 Processing от " << clientIP << ": " << method << " " << path << std::endl;
+        
         // 🔐 АУТЕНТИФИКАЦИЯ И РЕГИСТРАЦИЯ
         if (method == "POST" && path == "/register") {
-            return handleRegister(body);
+            return handleRegister(body, clientInfo);
         } else if (method == "POST" && path == "/login") {
-            return handleLogin(body);
+            return handleLogin(body, clientInfo);
         } else if (method == "POST" && path == "/logout") {
-            return handleLogout(sessionToken);
+            return handleLogout(sessionToken, clientInfo);
         } else if ((method == "GET" || method == "POST") && path == "/verify-token") {
-            // ✅ Поддерживаем как GET, так и POST запросы для verify-token
             std::string tokenToValidate = sessionToken;
             
             // Если это POST запрос, пытаемся извлечь токен из тела
@@ -715,24 +686,62 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                     }
                 } catch (const std::exception& e) {
                     std::cout << "⚠️ Не удалось распарсить тело verify-token запроса: " << e.what() << std::endl;
-                    // Продолжаем с токеном из заголовка
                 }
             }
             
-            if (!validateSession(tokenToValidate)) {
+            if (tokenToValidate.empty()) {
                 json errorResponse;
                 errorResponse["success"] = false;
-                errorResponse["error"] = "Invalid or expired token";
-                return createJsonResponse(errorResponse.dump(), 401);
-            } else {
+                errorResponse["valid"] = false;
+                errorResponse["error"] = "Token is required";
+                return createJsonResponse(errorResponse.dump(), 400);
+            }
+            
+            // УНИВЕРСАЛЬНАЯ ПРОВЕРКА ТОКЕНА
+            bool isValid = validateTokenInDatabase(tokenToValidate);
+            
+            if (isValid) {
+                // Токен валиден, получаем информацию о пользователе
                 std::string userId = getUserIdFromSession(tokenToValidate);
+                User user = dbService.getUserById(std::stoi(userId));
+                
+                if (user.userId == 0) {
+                    json errorResponse;
+                    errorResponse["success"] = false;
+                    errorResponse["valid"] = false;
+                    errorResponse["error"] = "User not found";
+                    return createJsonResponse(errorResponse.dump(), 404);
+                }
+                
+                // ФОРМИРУЕМ УНИВЕРСАЛЬНЫЙ ОТВЕТ ДЛЯ КЛИЕНТА
+                json responseData;
+                responseData["valid"] = true;
+                responseData["userId"] = userId;
+                responseData["user"] = {
+                    {"userId", user.userId},
+                    {"login", user.login},
+                    {"email", user.email},
+                    {"firstName", user.firstName},
+                    {"lastName", user.lastName},
+                    {"middleName", user.middleName},
+                    {"phoneNumber", user.phoneNumber}
+                };
+                
                 json response;
                 response["success"] = true;
-                response["userId"] = userId;
+                response["valid"] = true;
+                response["data"] = responseData;
+                response["message"] = "Token is valid";
+                
+                std::cout << "✅ Token validated successfully for user: " << user.login << std::endl;
                 return createJsonResponse(response.dump());
+            } else {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["valid"] = false;
+                errorResponse["error"] = "Invalid or expired token";
+                return createJsonResponse(errorResponse.dump(), 401);
             }
-        
-        // 👤 ПРОФИЛЬ И СЕССИИ
         } else if (method == "GET" && path == "/session-info") {
             return getSessionInfo(sessionToken);
         } else if (method == "GET" && path == "/profile") {
@@ -767,14 +776,17 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 return createJsonResponse(errorResponse.dump(), 401);
             }
             return handleGetSessions(sessionToken);
-        } else if (method == "DELETE" && path == "/sessions") {
+        
+        // НОВЫЙ МАРШРУТ ДЛЯ УДАЛЕНИЯ СЕССИИ ПО ТОКЕНУ В URL
+        } else if (method == "DELETE" && std::regex_match(path, matches, sessionTokenRegex)) {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
                 errorResponse["success"] = false;
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            return handleRevokeSession(body, sessionToken);
+            std::string targetToken = matches[1];
+            return handleRevokeSessionByToken(targetToken, sessionToken);
         
         // 👨‍🏫 УПРАВЛЕНИЕ ПРЕПОДАВАТЕЛЯМИ
         } else if (method == "GET" && path == "/teachers") {
@@ -813,7 +825,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 json j = json::parse(body);
                 if (j.contains("teacher_id") && !j["teacher_id"].is_null()) {
                     int teacherId = j["teacher_id"];
-                    std::cout << "🔄 Extracted teacher_id from body: " << teacherId << std::endl;
+                    std::cout << "🔄 Extracted teacher_id from body от " << clientIP << ": " << teacherId << std::endl;
                     return handleUpdateTeacher(body, teacherId, sessionToken);
                 } else {
                     json errorResponse;
@@ -965,7 +977,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
             int groupId = std::stoi(matches[1]);
             return handleDeleteGroup(groupId, sessionToken);
         
-        // 📋 ПОРТФОЛИО И СОБЫТИЯ
+        // 📋 ПОРТФОЛИО - полный CRUD
         } else if (method == "GET" && path == "/portfolio") {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
@@ -982,24 +994,141 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 return createJsonResponse(errorResponse.dump(), 401);
             }
             return handleAddPortfolio(body, sessionToken);
-        } else if (method == "GET" && path == "/events") {
+        } else if (method == "PUT" && path.find("/portfolio/") == 0) {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
                 errorResponse["success"] = false;
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            return getEventsJson(sessionToken);
-        } else if (method == "POST" && path == "/events") {
+            // Извлекаем ID из пути /portfolio/{id}
+            size_t lastSlash = path.find_last_of('/');
+            if (lastSlash != std::string::npos) {
+                try {
+                    int portfolioId = std::stoi(path.substr(lastSlash + 1));
+                    return handleUpdatePortfolio(body, portfolioId, sessionToken);
+                } catch (...) {
+                    return createJsonResponse("{\"success\": false, \"error\": \"Invalid portfolio ID\"}", 400);
+                }
+            }
+        } else if (method == "DELETE" && path.find("/portfolio/") == 0) {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
                 errorResponse["success"] = false;
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            return handleAddEvent(body, sessionToken);
-        
-        // ℹ️ СИСТЕМНАЯ ИНФОРМАЦИЯ
+            size_t lastSlash = path.find_last_of('/');
+            if (lastSlash != std::string::npos) {
+                try {
+                    int portfolioId = std::stoi(path.substr(lastSlash + 1));
+                    return handleDeletePortfolio(portfolioId, sessionToken);
+                } catch (...) {
+                    return createJsonResponse("{\"success\": false, \"error\": \"Invalid portfolio ID\"}", 400);
+                }
+            }
+        }
+
+// 📅 СОБЫТИЯ - полный CRUD
+else if (method == "GET" && path == "/events") {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    return getEventsJson(sessionToken);
+} else if (method == "POST" && path == "/events") {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    return handleAddEvent(body, sessionToken);
+} else if (method == "PUT" && path.find("/events/") == 0) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    size_t lastSlash = path.find_last_of('/');
+    if (lastSlash != std::string::npos) {
+        try {
+            int eventId = std::stoi(path.substr(lastSlash + 1));
+            return handleUpdateEvent(body, eventId, sessionToken);
+        } catch (...) {
+            return createJsonResponse("{\"success\": false, \"error\": \"Invalid event ID\"}", 400);
+        }
+    }
+} else if (method == "DELETE" && path.find("/events/") == 0) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    size_t lastSlash = path.find_last_of('/');
+    if (lastSlash != std::string::npos) {
+        try {
+            int eventId = std::stoi(path.substr(lastSlash + 1));
+            return handleDeleteEvent(eventId, sessionToken);
+        } catch (...) {
+            return createJsonResponse("{\"success\": false, \"error\": \"Invalid event ID\"}", 400);
+        }
+    }
+}
+
+// 📂 КАТЕГОРИИ СОБЫТИЙ - полный CRUD
+else if (method == "GET" && path == "/event-categories") {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    return getEventCategoriesJson(sessionToken);
+} else if (method == "POST" && path == "/event-categories") {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    return handleAddEventCategory(body, sessionToken);
+} else if (method == "PUT" && path.find("/event-categories/") == 0) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    size_t lastSlash = path.find_last_of('/');
+    if (lastSlash != std::string::npos) {
+        try {
+            int categoryId = std::stoi(path.substr(lastSlash + 1));
+            return handleUpdateEventCategory(body, categoryId, sessionToken);
+        } catch (...) {
+            return createJsonResponse("{\"success\": false, \"error\": \"Invalid category ID\"}", 400);
+        }
+    }
+} else if (method == "DELETE" && path.find("/event-categories/") == 0) {
+    if (!validateSession(sessionToken)) {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
+    }
+    size_t lastSlash = path.find_last_of('/');
+    if (lastSlash != std::string::npos) {
+        try {
+            int categoryId = std::stoi(path.substr(lastSlash + 1));
+            return handleDeleteEventCategory(categoryId, sessionToken);
+        } catch (...) {
+            return createJsonResponse("{\"success\": false, \"error\": \"Invalid category ID\"}", 400);
+            }
+        }
         } else if (method == "GET" && path == "/api/status") {
             return handleStatus();
         } else if (method == "GET" && path == "/") {
@@ -1009,10 +1138,11 @@ std::string ApiService::processRequest(const std::string& method, const std::str
         // ❌ НЕИЗВЕСТНЫЙ ЭНДПОИНТ
         } else {
             // Для неизвестных путей возвращаем 404
+            std::cout << "❌ Неизвестный endpoint от " << clientIP << ": " << path << std::endl;
             return createJsonResponse("{\"success\": false, \"error\": \"Endpoint not found\"}", 404);
         }
     } catch (const std::exception& e) {
-        std::cout << "💥 EXCEPTION in processRequest: " << e.what() << std::endl;
+        std::cout << "💥 EXCEPTION in processRequest для клиента " << clientIP << ": " << e.what() << std::endl;
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Internal server error";
@@ -1037,7 +1167,7 @@ std::string ApiService::createJsonResponse(const std::string& content, int statu
                "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
                "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
                "\r\n"
-               "{\"success\":false,\"error\":\"Empty response\"}";
+               R"({"success":false,"error":"Empty response"})";
     }
     
     std::string statusText;
@@ -1072,8 +1202,8 @@ std::string ApiService::generateSessionToken() {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 255);
-    
     unsigned char buffer[32];
+    
     for (size_t i = 0; i < sizeof(buffer); i++) {
         buffer[i] = static_cast<unsigned char>(dis(gen));
     }
@@ -1082,38 +1212,8 @@ std::string ApiService::generateSessionToken() {
     for (size_t i = 0; i < sizeof(buffer); i++) {
         ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer[i]);
     }
+    
     return ss.str();
-}
-
-bool ApiService::validateSession(const std::string& token) {
-    if (token.empty()) {
-        return false;
-    }
-    
-    std::lock_guard<std::mutex> lock(sessionsMutex);
-    
-    auto it = sessions.find(token);
-    if (it == sessions.end()) {
-        return false;
-    }
-    
-    // Проверяем, что данные сессии валидны
-    if (it->second.userId.empty() || it->second.email.empty()) {
-        sessions.erase(it);
-        return false;
-    }
-    
-    auto now = std::chrono::system_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::hours>(now - it->second.lastActivity);
-    
-    if (duration.count() > apiConfig.sessionTimeoutHours) {
-        sessions.erase(it);
-        return false;
-    }
-    
-    // Обновляем активность
-    it->second.lastActivity = now;
-    return true;
 }
 
 std::string ApiService::getUserIdFromSession(const std::string& token) {
@@ -1121,6 +1221,12 @@ std::string ApiService::getUserIdFromSession(const std::string& token) {
     auto it = sessions.find(token);
     if (it != sessions.end()) {
         return it->second.userId;
+    }
+    
+    // Check DB
+    Session sess = dbService.getSessionByToken(token);
+    if (!sess.token.empty()) {
+        return sess.userId;
     }
     
     return "";
@@ -1132,6 +1238,70 @@ std::string ApiService::handleStatus() {
     response["version"] = "1.0";
     response["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-
+    
     return createJsonResponse(response.dump());
+}
+
+// НОВАЯ ФУНКЦИЯ ДЛЯ ОТЗЫВА СЕССИИ ПО ТОКЕНУ В URL
+std::string ApiService::handleRevokeSessionByToken(const std::string& targetToken, const std::string& sessionToken) {
+    std::cout << "🔐 Обработка отзыва сессии по токену из URL..." << std::endl;
+    std::cout << "🎯 Целевой токен: " << targetToken << std::endl;
+
+    std::string userId = getUserIdFromSession(sessionToken);
+
+    std::cout << "🎯 Отзыв сессии для пользователя: " << userId << std::endl;
+    std::cout << "🔑 Целевой токен: " << targetToken << std::endl;
+    std::cout << "🔑 Текущий токен: " << sessionToken << std::endl;
+
+    if (targetToken == sessionToken) {
+        std::cout << "❌ Пользователь пытается отозвать текущую сессию" << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Cannot revoke current session";
+        return createJsonResponse(errorResponse.dump(), 400);
+    }
+
+    // Получаем целевую сессию из базы данных
+    Session targetSession = dbService.getSessionByToken(targetToken);
+
+    if (targetSession.token.empty()) {
+        std::cout << "❌ Сессия не найдена в БД" << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Session not found";
+        return createJsonResponse(errorResponse.dump(), 404);
+    }
+
+    // Проверяем, что сессия принадлежит текущему пользователю
+    if (targetSession.userId != userId) {
+        std::cout << "❌ Доступ запрещен: сессия принадлежит другому пользователю" << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Access denied";
+        return createJsonResponse(errorResponse.dump(), 403);
+    }
+
+    // УДАЛЯЕМ СЕССИЮ ИЗ БАЗЫ ДАННЫХ
+    bool deleteSuccess = dbService.deleteSession(targetToken);
+
+    if (deleteSuccess) {
+        // УДАЛЯЕМ СЕССИЮ ИЗ ПАМЯТИ
+        {
+            std::lock_guard<std::mutex> lock(sessionsMutex);
+            sessions.erase(targetToken);
+        }
+
+        std::cout << "✅ Сессия успешно отозвана!" << std::endl;
+
+        json response;
+        response["success"] = true;
+        response["message"] = "Session revoked successfully";
+        return createJsonResponse(response.dump());
+    } else {
+        std::cout << "❌ Ошибка при удалении сессии из базы данных" << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Failed to revoke session";
+        return createJsonResponse(errorResponse.dump(), 500);
+    }
 }

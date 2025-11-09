@@ -699,120 +699,6 @@ StudentGroup DatabaseService::getGroupById(int groupId) {
     return group;
 }
 
-// Portfolio management
-std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
-    std::vector<StudentPortfolio> portfolios;
-    
-    configManager.loadConfig(currentConfig);
-    
-    if (!connection && !connect(currentConfig)) {
-        return portfolios;
-    }
-    
-    PGresult* res = PQexec(connection, "SELECT * FROM student_portfolio");
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        PQclear(res);
-        return portfolios;
-    }
-    
-    int rows = PQntuples(res);
-    for (int i = 0; i < rows; i++) {
-        StudentPortfolio portfolio;
-        portfolio.portfolioId = std::stoi(PQgetvalue(res, i, 0));
-        portfolio.studentCode = std::stoi(PQgetvalue(res, i, 1));
-        portfolio.measureCode = PQgetvalue(res, i, 2);
-        portfolio.date = PQgetvalue(res, i, 3);
-        portfolio.passportSeries = PQgetvalue(res, i, 4);
-        portfolio.passportNumber = PQgetvalue(res, i, 5);
-        
-        portfolios.push_back(portfolio);
-    }
-    
-    PQclear(res);
-    return portfolios;
-}
-
-bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
-    configManager.loadConfig(currentConfig);
-    
-    if (!connection && !connect(currentConfig)) {
-        return false;
-    }
-    
-    std::string sql = "INSERT INTO student_portfolio (student_code, measure_code, date, passport_series, passport_number) VALUES ($1, $2, $3, $4, $5)";
-    const char* params[5] = {
-        std::to_string(portfolio.studentCode).c_str(),
-        portfolio.measureCode.c_str(),
-        portfolio.date.c_str(),
-        portfolio.passportSeries.c_str(),
-        portfolio.passportNumber.c_str()
-    };
-    
-    PGresult* res = PQexecParams(connection, sql.c_str(), 5, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    PQclear(res);
-    
-    return success;
-}
-
-// Event management
-std::vector<Event> DatabaseService::getEvents() {
-    std::vector<Event> events;
-    configManager.loadConfig(currentConfig);
-    
-    if (!connection && !connect(currentConfig)) {
-        return events;
-    }
-    
-    PGresult* res = PQexec(connection, "SELECT event_id, event_category, event_type, start_date, end_date, location, lore FROM event");
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        PQclear(res);
-        return events;
-    }
-    
-    int rows = PQntuples(res);
-    for (int i = 0; i < rows; i++) {
-        Event event;
-        event.eventId = std::stoi(PQgetvalue(res, i, 0));
-        event.eventCategory = PQgetvalue(res, i, 1);
-        event.eventType = PQgetvalue(res, i, 2);
-        event.startDate = PQgetvalue(res, i, 3);
-        event.endDate = PQgetvalue(res, i, 4);
-        event.location = PQgetvalue(res, i, 5);
-        event.lore = PQgetvalue(res, i, 6);
-        
-        events.push_back(event);
-    }
-    
-    PQclear(res);
-    return events;
-}
-
-bool DatabaseService::addEvent(const Event& event) {
-    configManager.loadConfig(currentConfig);
-    
-    if (!connection && !connect(currentConfig)) {
-        return false;
-    }
-    
-    std::string sql = "INSERT INTO event (event_id, event_category, event_type, start_date, end_date, location, lore) VALUES ($1, $2, $3, $4, $5, $6, $7)";
-    const char* params[7] = {
-        std::to_string(event.eventId).c_str(),
-        event.eventCategory.c_str(),
-        event.eventType.c_str(),
-        event.startDate.c_str(),
-        event.endDate.c_str(),
-        event.location.c_str(),
-        event.lore.c_str()
-    };
-    
-    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    PQclear(res);
-    
-    return success;
-}
-
 // Specializations management
 std::vector<Specialization> DatabaseService::getSpecializations() {
     std::vector<Specialization> specializations;
@@ -944,4 +830,490 @@ std::vector<Specialization> DatabaseService::getTeacherSpecializations(int teach
     PQclear(res);
     
     return specializations;
+}
+
+
+// Portfolio management - полный CRUD
+std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
+    std::vector<StudentPortfolio> portfolios;
+    
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return portfolios;
+    }
+    
+    // Обновленный запрос с JOIN для получения имени студента
+    std::string sql = R"(
+        SELECT sp.portfolio_id, sp.student_code, sp.measure_code, sp.date, 
+               sp.passport_series, sp.passport_number, sp.description, sp.file_path,
+               s.last_name, s.first_name, s.middle_name
+        FROM student_portfolio sp
+        LEFT JOIN students s ON sp.student_code = s.student_code
+        ORDER BY sp.date DESC
+    )";
+    
+    PGresult* res = PQexec(connection, sql.c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Ошибка выполнения запроса портфолио: " << PQerrorMessage(connection) << std::endl;
+        PQclear(res);
+        return portfolios;
+    }
+    
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        StudentPortfolio portfolio;
+        portfolio.portfolioId = std::stoi(PQgetvalue(res, i, 0));
+        portfolio.studentCode = std::stoi(PQgetvalue(res, i, 1));
+        portfolio.measureCode = PQgetvalue(res, i, 2);
+        portfolio.date = PQgetvalue(res, i, 3);
+        portfolio.passportSeries = PQgetvalue(res, i, 4);
+        portfolio.passportNumber = PQgetvalue(res, i, 5);
+        portfolio.description = PQgetvalue(res, i, 6);
+        portfolio.filePath = PQgetvalue(res, i, 7);
+        
+        // Формируем полное имя студента
+        std::string lastName = PQgetvalue(res, i, 8);
+        std::string firstName = PQgetvalue(res, i, 9);
+        std::string middleName = PQgetvalue(res, i, 10);
+        portfolio.studentName = lastName + " " + firstName + " " + middleName;
+        
+        portfolios.push_back(portfolio);
+    }
+    
+    PQclear(res);
+    return portfolios;
+}
+
+bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = R"(
+        INSERT INTO student_portfolio 
+        (student_code, measure_code, date, passport_series, passport_number, description, file_path) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+    )";
+    
+    const char* params[7] = {
+        std::to_string(portfolio.studentCode).c_str(),
+        portfolio.measureCode.c_str(),
+        portfolio.date.c_str(),
+        portfolio.passportSeries.c_str(),
+        portfolio.passportNumber.c_str(),
+        portfolio.description.c_str(),
+        portfolio.filePath.c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка добавления портфолио: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+bool DatabaseService::updatePortfolio(const StudentPortfolio& portfolio) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = R"(
+        UPDATE student_portfolio 
+        SET student_code = $1, measure_code = $2, date = $3, passport_series = $4, 
+            passport_number = $5, description = $6, file_path = $7
+        WHERE portfolio_id = $8
+    )";
+    
+    const char* params[8] = {
+        std::to_string(portfolio.studentCode).c_str(),
+        portfolio.measureCode.c_str(),
+        portfolio.date.c_str(),
+        portfolio.passportSeries.c_str(),
+        portfolio.passportNumber.c_str(),
+        portfolio.description.c_str(),
+        portfolio.filePath.c_str(),
+        std::to_string(portfolio.portfolioId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка обновления портфолио: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+bool DatabaseService::deletePortfolio(int portfolioId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM student_portfolio WHERE portfolio_id = $1";
+    const char* params[1] = { std::to_string(portfolioId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка удаления портфолио: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+StudentPortfolio DatabaseService::getPortfolioById(int portfolioId) {
+    StudentPortfolio portfolio;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return portfolio;
+    }
+    
+    std::string sql = R"(
+        SELECT portfolio_id, student_code, measure_code, date, passport_series, 
+               passport_number, description, file_path
+        FROM student_portfolio 
+        WHERE portfolio_id = $1
+    )";
+    
+    const char* params[1] = { std::to_string(portfolioId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return portfolio;
+    }
+    
+    portfolio.portfolioId = std::stoi(PQgetvalue(res, 0, 0));
+    portfolio.studentCode = std::stoi(PQgetvalue(res, 0, 1));
+    portfolio.measureCode = PQgetvalue(res, 0, 2);
+    portfolio.date = PQgetvalue(res, 0, 3);
+    portfolio.passportSeries = PQgetvalue(res, 0, 4);
+    portfolio.passportNumber = PQgetvalue(res, 0, 5);
+    portfolio.description = PQgetvalue(res, 0, 6);
+    portfolio.filePath = PQgetvalue(res, 0, 7);
+    
+    PQclear(res);
+    return portfolio;
+}
+
+// Event management - полный CRUD
+std::vector<Event> DatabaseService::getEvents() {
+    std::vector<Event> events;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return events;
+    }
+    
+    // Обновленный запрос с JOIN для категорий
+    std::string sql = R"(
+        SELECT e.event_id, e.event_category, ec.name as category_name, 
+               e.event_type, e.start_date, e.end_date, e.location, e.lore,
+               e.max_participants, e.current_participants, e.status
+        FROM event e
+        LEFT JOIN event_category ec ON e.event_category = ec.event_category_id
+        ORDER BY e.start_date DESC
+    )";
+    
+    PGresult* res = PQexec(connection, sql.c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Ошибка выполнения запроса событий: " << PQerrorMessage(connection) << std::endl;
+        PQclear(res);
+        return events;
+    }
+    
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        Event event;
+        event.eventId = std::stoi(PQgetvalue(res, i, 0));
+        event.eventCategory = PQgetvalue(res, i, 1);
+        event.categoryName = PQgetvalue(res, i, 2);
+        event.eventType = PQgetvalue(res, i, 3);
+        event.startDate = PQgetvalue(res, i, 4);
+        event.endDate = PQgetvalue(res, i, 5);
+        event.location = PQgetvalue(res, i, 6);
+        event.lore = PQgetvalue(res, i, 7);
+        event.maxParticipants = std::stoi(PQgetvalue(res, i, 8));
+        event.currentParticipants = std::stoi(PQgetvalue(res, i, 9));
+        event.status = PQgetvalue(res, i, 10);
+        
+        events.push_back(event);
+    }
+    
+    PQclear(res);
+    return events;
+}
+
+bool DatabaseService::addEvent(const Event& event) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = R"(
+        INSERT INTO event 
+        (event_category, event_type, start_date, end_date, location, lore, 
+         max_participants, current_participants, status) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    )";
+    
+    const char* params[9] = {
+        event.eventCategory.c_str(),
+        event.eventType.c_str(),
+        event.startDate.c_str(),
+        event.endDate.c_str(),
+        event.location.c_str(),
+        event.lore.c_str(),
+        std::to_string(event.maxParticipants).c_str(),
+        std::to_string(event.currentParticipants).c_str(),
+        event.status.c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 9, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка добавления события: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+bool DatabaseService::updateEvent(const Event& event) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = R"(
+        UPDATE event 
+        SET event_category = $1, event_type = $2, start_date = $3, end_date = $4, 
+            location = $5, lore = $6, max_participants = $7, current_participants = $8, status = $9
+        WHERE event_id = $10
+    )";
+    
+    const char* params[10] = {
+        event.eventCategory.c_str(),
+        event.eventType.c_str(),
+        event.startDate.c_str(),
+        event.endDate.c_str(),
+        event.location.c_str(),
+        event.lore.c_str(),
+        std::to_string(event.maxParticipants).c_str(),
+        std::to_string(event.currentParticipants).c_str(),
+        event.status.c_str(),
+        std::to_string(event.eventId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 10, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка обновления события: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+bool DatabaseService::deleteEvent(int eventId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM event WHERE event_id = $1";
+    const char* params[1] = { std::to_string(eventId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка удаления события: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+Event DatabaseService::getEventById(int eventId) {
+    Event event;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return event;
+    }
+    
+    std::string sql = R"(
+        SELECT event_id, event_category, event_type, start_date, end_date, 
+               location, lore, max_participants, current_participants, status
+        FROM event 
+        WHERE event_id = $1
+    )";
+    
+    const char* params[1] = { std::to_string(eventId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return event;
+    }
+    
+    event.eventId = std::stoi(PQgetvalue(res, 0, 0));
+    event.eventCategory = PQgetvalue(res, 0, 1);
+    event.eventType = PQgetvalue(res, 0, 2);
+    event.startDate = PQgetvalue(res, 0, 3);
+    event.endDate = PQgetvalue(res, 0, 4);
+    event.location = PQgetvalue(res, 0, 5);
+    event.lore = PQgetvalue(res, 0, 6);
+    event.maxParticipants = std::stoi(PQgetvalue(res, 0, 7));
+    event.currentParticipants = std::stoi(PQgetvalue(res, 0, 8));
+    event.status = PQgetvalue(res, 0, 9);
+    
+    PQclear(res);
+    return event;
+}
+
+// Event Category management - полный CRUD
+std::vector<EventCategory> DatabaseService::getEventCategories() {
+    std::vector<EventCategory> categories;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return categories;
+    }
+    
+    PGresult* res = PQexec(connection, "SELECT event_category_id, name, description FROM event_category ORDER BY name");
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Ошибка выполнения запроса категорий событий: " << PQerrorMessage(connection) << std::endl;
+        PQclear(res);
+        return categories;
+    }
+    
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        EventCategory category;
+        category.eventCategoryId = std::stoi(PQgetvalue(res, i, 0));
+        category.name = PQgetvalue(res, i, 1);
+        category.description = PQgetvalue(res, i, 2);
+        categories.push_back(category);
+    }
+    
+    PQclear(res);
+    return categories;
+}
+
+bool DatabaseService::addEventCategory(const EventCategory& category) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "INSERT INTO event_category (name, description) VALUES ($1, $2)";
+    const char* params[2] = {
+        category.name.c_str(),
+        category.description.c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка добавления категории события: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+bool DatabaseService::updateEventCategory(const EventCategory& category) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "UPDATE event_category SET name = $1, description = $2 WHERE event_category_id = $3";
+    const char* params[3] = {
+        category.name.c_str(),
+        category.description.c_str(),
+        std::to_string(category.eventCategoryId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 3, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка обновления категории события: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+bool DatabaseService::deleteEventCategory(int eventCategoryId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "DELETE FROM event_category WHERE event_category_id = $1";
+    const char* params[1] = { std::to_string(eventCategoryId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "Ошибка удаления категории события: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+EventCategory DatabaseService::getEventCategoryById(int eventCategoryId) {
+    EventCategory category;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return category;
+    }
+    
+    std::string sql = "SELECT event_category_id, name, description FROM event_category WHERE event_category_id = $1";
+    const char* params[1] = { std::to_string(eventCategoryId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return category;
+    }
+    
+    category.eventCategoryId = std::stoi(PQgetvalue(res, 0, 0));
+    category.name = PQgetvalue(res, 0, 1);
+    category.description = PQgetvalue(res, 0, 2);
+    
+    PQclear(res);
+    return category;
 }
