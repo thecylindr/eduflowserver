@@ -252,7 +252,7 @@ std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::
 }
 
 std::string ApiService::getEventCategoriesJson(const std::string& sessionToken) {
-    std::cout << "📂 Получение списка категорий событий..." << std::endl;
+    std::cout << "📋 Получение списка категорий событий..." << std::endl;
     
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
@@ -265,9 +265,8 @@ std::string ApiService::getEventCategoriesJson(const std::string& sessionToken) 
     
     for (const auto& category : categories) {
         json categoryJson;
-        categoryJson["event_category_id"] = category.eventCategoryId;
-        categoryJson["name"] = category.name;
-        categoryJson["description"] = category.description;
+        categoryJson["event_type"] = category.eventType;
+        categoryJson["category"] = category.category;
         
         response["data"].push_back(categoryJson);
     }

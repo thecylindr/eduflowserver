@@ -91,13 +91,13 @@ public:
     bool updateEvent(const Event& event);
     bool deleteEvent(int eventId);
     Event getEventById(int eventId);
-    
+
     std::vector<EventCategory> getEventCategories();
     bool addEventCategory(const EventCategory& category);
+    EventCategory getEventCategoryByType(const std::string& eventType);
     bool updateEventCategory(const EventCategory& category);
-    bool deleteEventCategory(int eventCategoryId);
-    EventCategory getEventCategoryById(int eventCategoryId);
-
+    bool deleteEventCategory(const std::string& eventType);
+    
 private:
     void executeSQL(const std::string& sql);
     

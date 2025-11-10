@@ -117,21 +117,25 @@ public:
     std::string getSpecializationsJson(const std::string& sessionToken);
     std::string handleStatus();
 
-    // Добавьте эти методы в класс ApiService:
+    // Portfolio
     std::string handleAddPortfolio(const std::string& body, const std::string& sessionToken);
     std::string handleUpdatePortfolio(const std::string& body, int portfolioId, const std::string& sessionToken);
     std::string handleDeletePortfolio(int portfolioId, const std::string& sessionToken);
     std::string getPortfolioJson(const std::string& sessionToken);
 
+    // Event
     std::string handleAddEvent(const std::string& body, const std::string& sessionToken);
     std::string handleUpdateEvent(const std::string& body, int eventId, const std::string& sessionToken);
     std::string handleDeleteEvent(int eventId, const std::string& sessionToken);
     std::string getEventsJson(const std::string& sessionToken);
 
     std::string handleAddEventCategory(const std::string& body, const std::string& sessionToken);
-    std::string handleUpdateEventCategory(const std::string& body, int categoryId, const std::string& sessionToken);
-    std::string handleDeleteEventCategory(int categoryId, const std::string& sessionToken);
+
     std::string getEventCategoriesJson(const std::string& sessionToken);
+    std::string handleUpdateEventCategory(const std::string& body, const std::string& eventType, const std::string& sessionToken);
+    std::string handleDeleteEventCategory(const std::string& eventType, const std::string& sessionToken);
+    std::string handleUpdateEventCategory(const std::string& body, int categoryId, const std::string& sessionToken);
+
 };
 
 #endif

@@ -595,8 +595,8 @@ std::string ApiService::getEventsJson(const std::string& sessionToken) {
     
     for (const auto& event : events) {
         json eventJson;
-        eventJson["event_id"] = event.eventId;
-        eventJson["measure_code"] = event.measureCode;
+        eventJson["id"] = event.eventId;
+        eventJson["event_id"] = event.measureCode;
         eventJson["event_category"] = event.eventCategory;
         eventJson["event_type"] = event.eventType;
         eventJson["start_date"] = event.startDate;

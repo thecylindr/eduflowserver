@@ -280,10 +280,11 @@ bool DatabaseService::addTeacher(const Teacher& teacher) {
         return false;
     }
     
-    // Получаем ID преподавателя и сгенерированный код специализации
-    int teacherId = std::stoi(PQgetvalue(res, 0, 0));
+    int teacherId = std::stoi(PQgetvalue(res, 0, 0));  // Используем переменную
     int specializationCode = std::stoi(PQgetvalue(res, 0, 1));
     PQclear(res);
+    
+    std::cout << "✅ Teacher added with ID: " << teacherId << ", specialization code: " << specializationCode << std::endl;  // Используем teacherId здесь
     
     // Теперь добавляем специализации в specialization_list
     if (!teacher.specializations.empty()) {
@@ -1250,12 +1251,11 @@ std::vector<Event> DatabaseService::getEvents() {
         return events;
     }
     
-    // ИСПРАВЛЕННЫЙ ЗАПРОС - используем event_category вместо event_category_id
     std::string sql = R"(
-        SELECT e.id, e.event_id, e.event_category, e.event_type, 
-               e.start_date, e.end_date, e.location, e.lore
-        FROM event e
-        ORDER BY e.start_date DESC
+        SELECT id, event_id, event_category, event_type, 
+               start_date, end_date, location, lore
+        FROM event 
+        ORDER BY start_date DESC
     )";
     
     PGresult* res = PQexec(connection, sql.c_str());
@@ -1270,7 +1270,7 @@ std::vector<Event> DatabaseService::getEvents() {
         Event event;
         event.eventId = std::stoi(PQgetvalue(res, i, 0));
         event.measureCode = std::stoi(PQgetvalue(res, i, 1));
-        event.eventCategory = PQgetvalue(res, i, 2); // ИСПРАВЛЕНО: event_category
+        event.eventCategory = PQgetvalue(res, i, 2);
         event.eventType = PQgetvalue(res, i, 3);
         event.startDate = PQgetvalue(res, i, 4);
         event.endDate = PQgetvalue(res, i, 5);
@@ -1291,7 +1291,6 @@ bool DatabaseService::addEvent(const Event& event) {
         return false;
     }
     
-    // ИСПРАВЛЕННЫЙ ЗАПРОС - используем event_category вместо event_category_id
     std::string sql = R"(
         INSERT INTO event 
         (event_id, event_category, event_type, start_date, end_date, location, lore) 
@@ -1300,7 +1299,7 @@ bool DatabaseService::addEvent(const Event& event) {
     
     const char* params[7] = {
         std::to_string(event.measureCode).c_str(),
-        event.eventCategory.c_str(), // ИСПРАВЛЕНО: event_category
+        event.eventCategory.c_str(),
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
@@ -1326,7 +1325,6 @@ bool DatabaseService::updateEvent(const Event& event) {
         return false;
     }
     
-    // ИСПРАВЛЕННЫЙ ЗАПРОС - используем event_category вместо event_category_id
     std::string sql = R"(
         UPDATE event 
         SET event_id = $1, event_category = $2, event_type = $3, 
@@ -1336,7 +1334,7 @@ bool DatabaseService::updateEvent(const Event& event) {
     
     const char* params[8] = {
         std::to_string(event.measureCode).c_str(),
-        event.eventCategory.c_str(), // ИСПРАВЛЕНО: event_category
+        event.eventCategory.c_str(),
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
@@ -1363,7 +1361,7 @@ bool DatabaseService::deleteEvent(int eventId) {
         return false;
     }
     
-    std::string sql = "DELETE FROM event WHERE event_id = $1";
+    std::string sql = "DELETE FROM event WHERE id = $1";
     const char* params[1] = { std::to_string(eventId).c_str() };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
@@ -1413,57 +1411,29 @@ Event DatabaseService::getEventById(int eventId) {
     return event;
 }
 
-// Event Category management - полный CRUD
-std::vector<EventCategory> DatabaseService::getEventCategories() {
-    std::vector<EventCategory> categories;
+// Event Category management
+EventCategory DatabaseService::getEventCategoryByType(const std::string& eventType) {
+    EventCategory category;
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
-        return categories;
+        return category;
     }
     
-    PGresult* res = PQexec(connection, "SELECT event_category_id, name, description FROM event_category ORDER BY name");
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cerr << "Ошибка выполнения запроса категорий событий: " << PQerrorMessage(connection) << std::endl;
+    std::string sql = "SELECT event_type, category FROM event_categories WHERE event_type = $1";
+    const char* params[1] = { eventType.c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
         PQclear(res);
-        return categories;
+        return category;
     }
     
-    int rows = PQntuples(res);
-    for (int i = 0; i < rows; i++) {
-        EventCategory category;
-        category.eventCategoryId = std::stoi(PQgetvalue(res, i, 0));
-        category.name = PQgetvalue(res, i, 1);
-        category.description = PQgetvalue(res, i, 2);
-        categories.push_back(category);
-    }
+    category.eventType = PQgetvalue(res, 0, 0);
+    category.category = PQgetvalue(res, 0, 1);
     
     PQclear(res);
-    return categories;
-}
-
-bool DatabaseService::addEventCategory(const EventCategory& category) {
-    configManager.loadConfig(currentConfig);
-    
-    if (!connection && !connect(currentConfig)) {
-        return false;
-    }
-    
-    std::string sql = "INSERT INTO event_category (name, description) VALUES ($1, $2)";
-    const char* params[2] = {
-        category.name.c_str(),
-        category.description.c_str()
-    };
-    
-    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    
-    if (!success) {
-        std::cerr << "Ошибка добавления категории события: " << PQerrorMessage(connection) << std::endl;
-    }
-    
-    PQclear(res);
-    return success;
+    return category;
 }
 
 bool DatabaseService::updateEventCategory(const EventCategory& category) {
@@ -1473,14 +1443,14 @@ bool DatabaseService::updateEventCategory(const EventCategory& category) {
         return false;
     }
     
-    std::string sql = "UPDATE event_category SET name = $1, description = $2 WHERE event_category_id = $3";
-    const char* params[3] = {
-        category.name.c_str(),
-        category.description.c_str(),
-        std::to_string(category.eventCategoryId).c_str()
+    // Обновляем только category (полное наименование)
+    std::string sql = "UPDATE event_categories SET category = $1 WHERE event_type = $2";
+    const char* params[2] = {
+        category.category.c_str(),
+        category.eventType.c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 3, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
@@ -1491,15 +1461,15 @@ bool DatabaseService::updateEventCategory(const EventCategory& category) {
     return success;
 }
 
-bool DatabaseService::deleteEventCategory(int eventCategoryId) {
+bool DatabaseService::deleteEventCategory(const std::string& eventType) {
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
         return false;
     }
     
-    std::string sql = "DELETE FROM event_category WHERE event_category_id = $1";
-    const char* params[1] = { std::to_string(eventCategoryId).c_str() };
+    std::string sql = "DELETE FROM event_category WHERE event_type = $1";
+    const char* params[1] = { eventType.c_str() };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
@@ -1512,27 +1482,63 @@ bool DatabaseService::deleteEventCategory(int eventCategoryId) {
     return success;
 }
 
-EventCategory DatabaseService::getEventCategoryById(int eventCategoryId) {
-    EventCategory category;
+
+std::vector<EventCategory> DatabaseService::getEventCategories() {
+    std::vector<EventCategory> categories;
     configManager.loadConfig(currentConfig);
     
     if (!connection && !connect(currentConfig)) {
-        return category;
+        return categories;
     }
     
-    std::string sql = "SELECT event_category_id, name, description FROM event_category WHERE event_category_id = $1";
-    const char* params[1] = { std::to_string(eventCategoryId).c_str() };
+    // Запрос остается тем же - получаем event_type и category
+    std::string sql = "SELECT event_type, category FROM event_categories";
+    PGresult* res = PQexec(connection, sql.c_str());
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Ошибка выполнения запроса категорий событий: " << PQerrorMessage(connection) << std::endl;
         PQclear(res);
-        return category;
+        return categories;
     }
     
-    category.eventCategoryId = std::stoi(PQgetvalue(res, 0, 0));
-    category.name = PQgetvalue(res, 0, 1);
-    category.description = PQgetvalue(res, 0, 2);
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        EventCategory category;
+        category.eventType = PQgetvalue(res, i, 0);
+        category.category = PQgetvalue(res, i, 1);
+        
+        categories.push_back(category);
+    }
     
     PQclear(res);
-    return category;
+    std::cout << "✅ Получено категорий событий: " << categories.size() << std::endl;
+    return categories;
+}
+
+bool DatabaseService::addEventCategory(const EventCategory& category) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    // Запрос остается тем же - вставляем event_type и category
+    std::string sql = "INSERT INTO event_categories (event_type, category) VALUES ($1, $2)";
+    const char* params[2] = {
+        category.eventType.c_str(),
+        category.category.c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (success) {
+        std::cout << "✅ Категория события добавлена: " << category.eventType 
+                  << " - " << category.category << std::endl;
+    } else {
+        std::cerr << "Ошибка добавления категории события: " << PQerrorMessage(connection) << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
 }

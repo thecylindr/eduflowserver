@@ -107,7 +107,7 @@ bool DatabaseService::setupDatabase() {
         "location VARCHAR(24),"
         "lore TEXT)",
         
-        "CREATE TABLE IF NOT EXISTS event_category ("
+        "CREATE TABLE IF NOT EXISTS event_categories ("
         "event_type VARCHAR(24) REFERENCES event(event_category),"
         "category VARCHAR(64))",
         

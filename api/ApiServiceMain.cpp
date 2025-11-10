@@ -660,7 +660,10 @@ std::string ApiService::processRequest(const std::string& method, const std::str
     std::regex specializationRegex("^/specializations/(\\d+)$");
     std::regex teacherSpecializationsRegex("^/teachers/(\\d+)/specializations$");
     std::regex teacherSpecializationRegex("^/teachers/(\\d+)/specializations/(\\d+)$");
-    std::regex sessionTokenRegex("^/sessions/([a-fA-F0-9]+)$");  // НОВЫЙ REGEX ДЛЯ СЕССИЙ
+    std::regex sessionTokenRegex("^/sessions/([a-fA-F0-9]+)$");
+    std::regex eventRegex("^/events/(\\d+)$");
+    std::regex portfolioRegex("^/portfolio/(\\d+)$");
+    std::regex eventCategoryRegex("^/event-categories/(.+)$");
     std::smatch matches;
     
     try {
@@ -994,166 +997,113 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 return createJsonResponse(errorResponse.dump(), 401);
             }
             return handleAddPortfolio(body, sessionToken);
-        } else if (method == "PUT" && path.find("/portfolio/") == 0) {
+        } else if (method == "PUT" && std::regex_match(path, matches, portfolioRegex)) {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
                 errorResponse["success"] = false;
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            // Извлекаем ID из пути /portfolio/{id}
-            size_t lastSlash = path.find_last_of('/');
-            if (lastSlash != std::string::npos) {
-                try {
-                    int portfolioId = std::stoi(path.substr(lastSlash + 1));
-                    return handleUpdatePortfolio(body, portfolioId, sessionToken);
-                } catch (...) {
-                    return createJsonResponse("{\"success\": false, \"error\": \"Invalid portfolio ID\"}", 400);
-                }
-            }
-        } else if (method == "DELETE" && path.find("/portfolio/") == 0) {
+            int portfolioId = std::stoi(matches[1]);
+            return handleUpdatePortfolio(body, portfolioId, sessionToken);
+        } else if (method == "DELETE" && std::regex_match(path, matches, portfolioRegex)) {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
                 errorResponse["success"] = false;
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            size_t lastSlash = path.find_last_of('/');
-            if (lastSlash != std::string::npos) {
-                try {
-                    int portfolioId = std::stoi(path.substr(lastSlash + 1));
-                    return handleDeletePortfolio(portfolioId, sessionToken);
-                } catch (...) {
-                    return createJsonResponse("{\"success\": false, \"error\": \"Invalid portfolio ID\"}", 400);
-                }
-            }
-        }
-
-// 📅 СОБЫТИЯ - полный CRUD
-else if (method == "GET" && path == "/events") {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    return getEventsJson(sessionToken);
-} else if (method == "POST" && path == "/events") {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    return handleAddEvent(body, sessionToken);
-} else if (method == "PUT" && path.find("/events/") == 0) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    size_t lastSlash = path.find_last_of('/');
-    if (lastSlash != std::string::npos) {
-        try {
-            int eventId = std::stoi(path.substr(lastSlash + 1));
-            return handleUpdateEvent(body, eventId, sessionToken);
-        } catch (...) {
-            return createJsonResponse("{\"success\": false, \"error\": \"Invalid event ID\"}", 400);
-        }
-    }
-} else if (method == "DELETE" && path.find("/events/") == 0) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    size_t lastSlash = path.find_last_of('/');
-    if (lastSlash != std::string::npos) {
-        try {
-            int eventId = std::stoi(path.substr(lastSlash + 1));
-            return handleDeleteEvent(eventId, sessionToken);
-        } catch (...) {
-            return createJsonResponse("{\"success\": false, \"error\": \"Invalid event ID\"}", 400);
-        }
-    }
-}
-
-// 📂 КАТЕГОРИИ СОБЫТИЙ - полный CRUD
-else if (method == "GET" && path == "/event-categories") {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    return getEventCategoriesJson(sessionToken);
-} else if (method == "POST" && path == "/event-categories") {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    return handleAddEventCategory(body, sessionToken);
-} else if (method == "PUT" && path.find("/event-categories/") == 0) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    size_t lastSlash = path.find_last_of('/');
-    if (lastSlash != std::string::npos) {
-        try {
-            int categoryId = std::stoi(path.substr(lastSlash + 1));
-            return handleUpdateEventCategory(body, categoryId, sessionToken);
-        } catch (...) {
-            return createJsonResponse("{\"success\": false, \"error\": \"Invalid category ID\"}", 400);
-        }
-    }
-} else if (method == "DELETE" && path.find("/event-categories/") == 0) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    size_t lastSlash = path.find_last_of('/');
-    if (lastSlash != std::string::npos) {
-        try {
-            int categoryId = std::stoi(path.substr(lastSlash + 1));
-            return handleDeleteEventCategory(categoryId, sessionToken);
-        } catch (...) {
-            return createJsonResponse("{\"success\": false, \"error\": \"Invalid category ID\"}", 400);
-            }
-        }
-        } else if (method == "GET" && path == "/api/status") {
-            return handleStatus();
-        } else if (method == "GET" && path == "/") {
-            // Welcome message for root path
-            return createJsonResponse("{\"message\": \"Welcome to EduFlow API!\", \"version\": \"1.0\", \"status\": \"running\"}");
+            int portfolioId = std::stoi(matches[1]);
+            return handleDeletePortfolio(portfolioId, sessionToken);
         
-        // ❌ НЕИЗВЕСТНЫЙ ЭНДПОИНТ
-        } else {
-            // Для неизвестных путей возвращаем 404
-            std::cout << "❌ Неизвестный endpoint от " << clientIP << ": " << path << std::endl;
-            return createJsonResponse("{\"success\": false, \"error\": \"Endpoint not found\"}", 404);
+        // 📅 СОБЫТИЯ - полный CRUD
+        } else if (method == "GET" && path == "/events") {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            return getEventsJson(sessionToken);
+        } else if (method == "POST" && path == "/events") {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            return handleAddEvent(body, sessionToken);
+        } else if (method == "PUT" && std::regex_match(path, matches, eventRegex)) {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            int eventId = std::stoi(matches[1]);
+            return handleUpdateEvent(body, eventId, sessionToken);
+        } else if (method == "DELETE" && std::regex_match(path, matches, eventRegex)) {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            int eventId = std::stoi(matches[1]);
+            return handleDeleteEvent(eventId, sessionToken);
+        }else if (method == "GET" && path == "/event-categories") {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            return getEventCategoriesJson(sessionToken);
         }
+        else if (method == "POST" && path == "/event-categories") {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            return handleAddEventCategory(body, sessionToken);
+        }
+        else if (method == "PUT" && std::regex_match(path, matches, eventCategoryRegex)) {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            std::string eventType = matches[1];
+            return handleUpdateEventCategory(body, eventType, sessionToken);
+        }
+        else if (method == "DELETE" && std::regex_match(path, matches, eventCategoryRegex)) {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            std::string eventType = matches[1];
+            return handleDeleteEventCategory(eventType, sessionToken);
+        }
+        
+        // 🏠 СТАТУС СЕРВЕРА
+        else if (method == "GET" && path == "/status") {
+            return handleStatus();
+        }
+        
+        // Если не найден подходящий маршрут
+        std::cout << "❌ Маршрут не найден: " << method << " " << path << std::endl;
+        return createJsonResponse("{\"success\": false, \"error\": \"Endpoint not found\"}", 404);
+        
     } catch (const std::exception& e) {
-        std::cout << "💥 EXCEPTION in processRequest для клиента " << clientIP << ": " << e.what() << std::endl;
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Internal server error";
-        return createJsonResponse(errorResponse.dump(), 500);
+        std::cout << "💥 EXCEPTION в processRequest для клиента " << clientIP << ": " << e.what() << std::endl;
+        logSuspiciousActivity(path, "Exception from IP: " + clientIP + " - " + std::string(e.what()));
+        return createJsonResponse("{\"success\": false, \"error\": \"Internal server error\"}", 500);
     }
-    
-    // 🔒 ЗАЩИТА ОТ КОМПИЛЯТОРА - гарантированный возврат
-    json errorResponse;
-    errorResponse["success"] = false;
-    errorResponse["error"] = "Unknown routing error";
-    return createJsonResponse(errorResponse.dump(), 500);
 }
 
 std::string ApiService::createJsonResponse(const std::string& content, int statusCode) {

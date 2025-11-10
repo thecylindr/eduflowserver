@@ -103,22 +103,20 @@ struct StudentPortfolio {
     std::string studentName; 
 };
 
-
-struct Event {
-    int eventId;
-    int measureCode;
-    std::string eventCategory;
-    std::string eventType;
-    std::string startDate;
-    std::string endDate;
-    std::string location;
-    std::string lore;
+struct EventCategory {
+    std::string eventType;   // event_type (VARCHAR(24) - первичный ключ)
+    std::string category;    // category (VARCHAR(64))
 };
 
-struct EventCategory {
-    int eventCategoryId;
-    std::string name;
-    std::string description;
+struct Event {
+    int eventId;           // id в таблице event (SERIAL PRIMARY KEY)
+    int measureCode;       // event_id (REFERENCES student_portfolio(measure_code))
+    std::string eventCategory; // event_category (VARCHAR(24))
+    std::string eventType; // event_type (VARCHAR(48))
+    std::string startDate;
+    std::string endDate;
+    std::string location;  // VARCHAR(24)
+    std::string lore;      // TEXT
 };
 
 #endif
