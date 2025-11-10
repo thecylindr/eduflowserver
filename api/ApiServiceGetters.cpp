@@ -292,15 +292,12 @@ std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
         portfolioJson["portfolio_id"] = portfolio.portfolioId;
         portfolioJson["student_code"] = portfolio.studentCode;
         portfolioJson["student_name"] = portfolio.studentName;
-        portfolioJson["measure_code"] = portfolio.measureCode;
         portfolioJson["date"] = portfolio.date;
-        portfolioJson["passport_series"] = portfolio.passportSeries;
-        portfolioJson["passport_number"] = portfolio.passportNumber;
-        portfolioJson["description"] = portfolio.description;
-        portfolioJson["file_path"] = portfolio.filePath;
+        portfolioJson["decree"] = portfolio.decree;
         
         response["data"].push_back(portfolioJson);
     }
     
+    std::cout << "✅ Отправлено портфолио: " << response["data"].size() << " записей" << std::endl;
     return createJsonResponse(response.dump());
 }

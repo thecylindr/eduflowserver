@@ -97,29 +97,22 @@ struct PasswordResetToken {
 struct StudentPortfolio {
     int portfolioId;
     int studentCode;
-    int measureCode;       
-    std::string studentName;
+    int measureCode;
     std::string date;
-    std::string passportSeries;
-    std::string passportNumber;
-    std::string description;
-    std::string filePath;
+    int decree;
+    std::string studentName; 
 };
 
-// ЕДИНСТВЕННОЕ ОПРЕДЕЛЕНИЕ Event
+
 struct Event {
     int eventId;
-    int measureCode;       
-    int eventCategoryId;   
-    std::string categoryName;
+    int measureCode;
+    std::string eventCategory;
     std::string eventType;
     std::string startDate;
     std::string endDate;
     std::string location;
     std::string lore;
-    int maxParticipants;
-    int currentParticipants;
-    std::string status;
 };
 
 struct EventCategory {

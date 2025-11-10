@@ -596,17 +596,13 @@ std::string ApiService::getEventsJson(const std::string& sessionToken) {
     for (const auto& event : events) {
         json eventJson;
         eventJson["event_id"] = event.eventId;
-        eventJson["measure_code"] = event.measureCode; // ИСПРАВЛЕНО: добавлено measure_code
-        eventJson["event_category_id"] = event.eventCategoryId; // ИСПРАВЛЕНО: используем eventCategoryId
-        eventJson["category_name"] = event.categoryName;
+        eventJson["measure_code"] = event.measureCode;
+        eventJson["event_category"] = event.eventCategory;
         eventJson["event_type"] = event.eventType;
         eventJson["start_date"] = event.startDate;
         eventJson["end_date"] = event.endDate;
         eventJson["location"] = event.location;
         eventJson["lore"] = event.lore;
-        eventJson["max_participants"] = event.maxParticipants;
-        eventJson["current_participants"] = event.currentParticipants;
-        eventJson["status"] = event.status;
         
         response["data"].push_back(eventJson);
     }

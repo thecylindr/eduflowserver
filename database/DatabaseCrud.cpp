@@ -285,8 +285,6 @@ bool DatabaseService::addTeacher(const Teacher& teacher) {
     int specializationCode = std::stoi(PQgetvalue(res, 0, 1));
     PQclear(res);
     
-    std::cout << "✅ Teacher added with ID: " << teacherId << ", specialization code: " << specializationCode << std::endl;
-    
     // Теперь добавляем специализации в specialization_list
     if (!teacher.specializations.empty()) {
         for (const auto& spec : teacher.specializations) {
@@ -1078,10 +1076,9 @@ std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
         return portfolios;
     }
     
-    // Обновленный запрос с JOIN для получения имени студента
+    // ИСПРАВЛЕННЫЙ ЗАПРОС - только реальные поля
     std::string sql = R"(
-        SELECT sp.portfolio_id, sp.student_code, sp.measure_code, sp.date, 
-               sp.passport_series, sp.passport_number, sp.description, sp.file_path,
+        SELECT sp.portfolio_id, sp.student_code, sp.measure_code, sp.date, sp.decree,
                s.last_name, s.first_name, s.middle_name
         FROM student_portfolio sp
         LEFT JOIN students s ON sp.student_code = s.student_code
@@ -1100,17 +1097,14 @@ std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
         StudentPortfolio portfolio;
         portfolio.portfolioId = std::stoi(PQgetvalue(res, i, 0));
         portfolio.studentCode = std::stoi(PQgetvalue(res, i, 1));
-        portfolio.measureCode = std::stoi(PQgetvalue(res, i, 2)); // measure_code теперь integer
+        portfolio.measureCode = std::stoi(PQgetvalue(res, i, 2)); // ДОБАВЛЕНО
         portfolio.date = PQgetvalue(res, i, 3);
-        portfolio.passportSeries = PQgetvalue(res, i, 4);
-        portfolio.passportNumber = PQgetvalue(res, i, 5);
-        portfolio.description = PQgetvalue(res, i, 6);
-        portfolio.filePath = PQgetvalue(res, i, 7);
+        portfolio.decree = std::stoi(PQgetvalue(res, i, 4)); // ИСПРАВЛЕНО: теперь int
         
         // Формируем полное имя студента
-        std::string lastName = PQgetvalue(res, i, 8);
-        std::string firstName = PQgetvalue(res, i, 9);
-        std::string middleName = PQgetvalue(res, i, 10);
+        std::string lastName = PQgetvalue(res, i, 5);
+        std::string firstName = PQgetvalue(res, i, 6);
+        std::string middleName = PQgetvalue(res, i, 7);
         portfolio.studentName = lastName + " " + firstName + " " + middleName;
         
         portfolios.push_back(portfolio);
@@ -1127,30 +1121,24 @@ bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
         return false;
     }
     
-    // measure_code не передаем - генерируется автоматически
+    // ИСПРАВЛЕННЫЙ ЗАПРОС - measure_code генерируется автоматически
     std::string sql = R"(
         INSERT INTO student_portfolio 
-        (student_code, date, passport_series, passport_number, description, file_path) 
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING measure_code
+        (student_code, date, decree) 
+        VALUES ($1, $2, $3)
     )";
     
-    const char* params[6] = {
+    const char* params[3] = {
         std::to_string(portfolio.studentCode).c_str(),
         portfolio.date.c_str(),
-        portfolio.passportSeries.c_str(),
-        portfolio.passportNumber.c_str(),
-        portfolio.description.c_str(),
-        portfolio.filePath.c_str()
+        std::to_string(portfolio.decree).c_str() // ИСПРАВЛЕНО: теперь int
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_TUPLES_OK);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 3, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (success) {
-        // Получаем сгенерированный measure_code
-        int generatedMeasureCode = std::stoi(PQgetvalue(res, 0, 0));
-        std::cout << "✅ Портфолио добавлено с measure_code: " << generatedMeasureCode << std::endl;
+        std::cout << "✅ Портфолио добавлено" << std::endl;
     } else {
         std::cerr << "Ошибка добавления портфолио: " << PQerrorMessage(connection) << std::endl;
     }
@@ -1166,24 +1154,21 @@ bool DatabaseService::updatePortfolio(const StudentPortfolio& portfolio) {
         return false;
     }
     
+    // ИСПРАВЛЕННЫЙ ЗАПРОС - measure_code не обновляется, он автоинкрементный
     std::string sql = R"(
         UPDATE student_portfolio 
-        SET student_code = $1, date = $2, passport_series = $3, 
-            passport_number = $4, description = $5, file_path = $6
-        WHERE portfolio_id = $7
+        SET student_code = $1, date = $2, decree = $3
+        WHERE portfolio_id = $4
     )";
     
-    const char* params[7] = {
+    const char* params[4] = {
         std::to_string(portfolio.studentCode).c_str(),
         portfolio.date.c_str(),
-        portfolio.passportSeries.c_str(),
-        portfolio.passportNumber.c_str(),
-        portfolio.description.c_str(),
-        portfolio.filePath.c_str(),
+        std::to_string(portfolio.decree).c_str(),
         std::to_string(portfolio.portfolioId).c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 4, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
@@ -1223,11 +1208,13 @@ StudentPortfolio DatabaseService::getPortfolioById(int portfolioId) {
         return portfolio;
     }
     
+    // ИСПРАВЛЕННЫЙ ЗАПРОС
     std::string sql = R"(
-        SELECT portfolio_id, student_code, measure_code, date, passport_series, 
-               passport_number, description, file_path
-        FROM student_portfolio 
-        WHERE portfolio_id = $1
+        SELECT sp.portfolio_id, sp.student_code, sp.measure_code, sp.date, sp.decree,
+               s.last_name, s.first_name, s.middle_name
+        FROM student_portfolio sp
+        LEFT JOIN students s ON sp.student_code = s.student_code
+        WHERE sp.portfolio_id = $1
     )";
     
     const char* params[1] = { std::to_string(portfolioId).c_str() };
@@ -1240,12 +1227,15 @@ StudentPortfolio DatabaseService::getPortfolioById(int portfolioId) {
     
     portfolio.portfolioId = std::stoi(PQgetvalue(res, 0, 0));
     portfolio.studentCode = std::stoi(PQgetvalue(res, 0, 1));
-    portfolio.measureCode = std::stoi(PQgetvalue(res, 0, 2)); // ИСПРАВЛЕНО: добавлен std::stoi
+    portfolio.measureCode = std::stoi(PQgetvalue(res, 0, 2)); // ДОБАВЛЕНО
     portfolio.date = PQgetvalue(res, 0, 3);
-    portfolio.passportSeries = PQgetvalue(res, 0, 4);
-    portfolio.passportNumber = PQgetvalue(res, 0, 5);
-    portfolio.description = PQgetvalue(res, 0, 6);
-    portfolio.filePath = PQgetvalue(res, 0, 7);
+    portfolio.decree = std::stoi(PQgetvalue(res, 0, 4)); // ИСПРАВЛЕНО: теперь int
+    
+    // Формируем имя студента
+    std::string lastName = PQgetvalue(res, 0, 5);
+    std::string firstName = PQgetvalue(res, 0, 6);
+    std::string middleName = PQgetvalue(res, 0, 7);
+    portfolio.studentName = lastName + " " + firstName + " " + middleName;
     
     PQclear(res);
     return portfolio;
@@ -1260,14 +1250,11 @@ std::vector<Event> DatabaseService::getEvents() {
         return events;
     }
     
-    // Обновленный запрос с JOIN для категорий и measure_code
+    // ИСПРАВЛЕННЫЙ ЗАПРОС - используем event_category вместо event_category_id
     std::string sql = R"(
-        SELECT e.event_id, e.measure_code, e.event_category_id, 
-               ec.name as category_name, e.event_type, e.start_date, 
-               e.end_date, e.location, e.lore, e.max_participants, 
-               e.current_participants, e.status
+        SELECT e.id, e.event_id, e.event_category, e.event_type, 
+               e.start_date, e.end_date, e.location, e.lore
         FROM event e
-        LEFT JOIN event_category ec ON e.event_category_id = ec.event_category_id
         ORDER BY e.start_date DESC
     )";
     
@@ -1282,17 +1269,13 @@ std::vector<Event> DatabaseService::getEvents() {
     for (int i = 0; i < rows; i++) {
         Event event;
         event.eventId = std::stoi(PQgetvalue(res, i, 0));
-        event.measureCode = std::stoi(PQgetvalue(res, i, 1)); // связь с портфолио
-        event.eventCategoryId = std::stoi(PQgetvalue(res, i, 2));
-        event.categoryName = PQgetvalue(res, i, 3);
-        event.eventType = PQgetvalue(res, i, 4);
-        event.startDate = PQgetvalue(res, i, 5);
-        event.endDate = PQgetvalue(res, i, 6);
-        event.location = PQgetvalue(res, i, 7);
-        event.lore = PQgetvalue(res, i, 8);
-        event.maxParticipants = std::stoi(PQgetvalue(res, i, 9));
-        event.currentParticipants = std::stoi(PQgetvalue(res, i, 10));
-        event.status = PQgetvalue(res, i, 11);
+        event.measureCode = std::stoi(PQgetvalue(res, i, 1));
+        event.eventCategory = PQgetvalue(res, i, 2); // ИСПРАВЛЕНО: event_category
+        event.eventType = PQgetvalue(res, i, 3);
+        event.startDate = PQgetvalue(res, i, 4);
+        event.endDate = PQgetvalue(res, i, 5);
+        event.location = PQgetvalue(res, i, 6);
+        event.lore = PQgetvalue(res, i, 7);
         
         events.push_back(event);
     }
@@ -1308,27 +1291,24 @@ bool DatabaseService::addEvent(const Event& event) {
         return false;
     }
     
+    // ИСПРАВЛЕННЫЙ ЗАПРОС - используем event_category вместо event_category_id
     std::string sql = R"(
         INSERT INTO event 
-        (measure_code, event_category_id, event_type, start_date, end_date, 
-         location, lore, max_participants, current_participants, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (event_id, event_category, event_type, start_date, end_date, location, lore) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
     )";
     
-    const char* params[10] = {
+    const char* params[7] = {
         std::to_string(event.measureCode).c_str(),
-        std::to_string(event.eventCategoryId).c_str(),
+        event.eventCategory.c_str(), // ИСПРАВЛЕНО: event_category
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
         event.location.c_str(),
-        event.lore.c_str(),
-        std::to_string(event.maxParticipants).c_str(),
-        std::to_string(event.currentParticipants).c_str(),
-        event.status.c_str()
+        event.lore.c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 10, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
@@ -1346,29 +1326,26 @@ bool DatabaseService::updateEvent(const Event& event) {
         return false;
     }
     
+    // ИСПРАВЛЕННЫЙ ЗАПРОС - используем event_category вместо event_category_id
     std::string sql = R"(
         UPDATE event 
-        SET measure_code = $1, event_category_id = $2, event_type = $3, 
-            start_date = $4, end_date = $5, location = $6, lore = $7, 
-            max_participants = $8, current_participants = $9, status = $10
-        WHERE event_id = $11
+        SET event_id = $1, event_category = $2, event_type = $3, 
+            start_date = $4, end_date = $5, location = $6, lore = $7
+        WHERE id = $8
     )";
     
-    const char* params[11] = {
+    const char* params[8] = {
         std::to_string(event.measureCode).c_str(),
-        std::to_string(event.eventCategoryId).c_str(),
+        event.eventCategory.c_str(), // ИСПРАВЛЕНО: event_category
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
         event.location.c_str(),
         event.lore.c_str(),
-        std::to_string(event.maxParticipants).c_str(),
-        std::to_string(event.currentParticipants).c_str(),
-        event.status.c_str(),
         std::to_string(event.eventId).c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 11, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
@@ -1409,11 +1386,10 @@ Event DatabaseService::getEventById(int eventId) {
     }
     
     std::string sql = R"(
-        SELECT event_id, measure_code, event_category_id, event_type, 
-               start_date, end_date, location, lore, max_participants, 
-               current_participants, status
+        SELECT id, event_id, event_category, event_type, 
+               start_date, end_date, location, lore
         FROM event 
-        WHERE event_id = $1
+        WHERE id = $1
     )";
     
     const char* params[1] = { std::to_string(eventId).c_str() };
@@ -1426,15 +1402,12 @@ Event DatabaseService::getEventById(int eventId) {
     
     event.eventId = std::stoi(PQgetvalue(res, 0, 0));
     event.measureCode = std::stoi(PQgetvalue(res, 0, 1));
-    event.eventCategoryId = std::stoi(PQgetvalue(res, 0, 2));
+    event.eventCategory = PQgetvalue(res, 0, 2);
     event.eventType = PQgetvalue(res, 0, 3);
     event.startDate = PQgetvalue(res, 0, 4);
     event.endDate = PQgetvalue(res, 0, 5);
     event.location = PQgetvalue(res, 0, 6);
     event.lore = PQgetvalue(res, 0, 7);
-    event.maxParticipants = std::stoi(PQgetvalue(res, 0, 8));
-    event.currentParticipants = std::stoi(PQgetvalue(res, 0, 9));
-    event.status = PQgetvalue(res, 0, 10);
     
     PQclear(res);
     return event;

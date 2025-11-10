@@ -16,12 +16,47 @@ std::string ApiService::handleAddPortfolio(const std::string& body, const std::s
         json j = json::parse(body);
         StudentPortfolio portfolio;
         
-        portfolio.studentCode = j["student_code"];
+        // ОБРАБОТКА student_code - должно быть INTEGER
+        if (j.contains("student_code")) {
+            if (j["student_code"].is_number()) {
+                portfolio.studentCode = j["student_code"].get<int>();
+            } else if (j["student_code"].is_string()) {
+                try {
+                    portfolio.studentCode = std::stoi(j["student_code"].get<std::string>());
+                } catch (const std::exception& e) {
+                    std::cout << "❌ Ошибка преобразования student_code: " << e.what() << std::endl;
+                    return createJsonResponse("{\"success\": false, \"error\": \"Неверный формат student_code\"}", 400);
+                }
+            } else {
+                return createJsonResponse("{\"success\": false, \"error\": \"Неверный тип student_code\"}", 400);
+            }
+        } else {
+            return createJsonResponse("{\"success\": false, \"error\": \"Отсутствует student_code\"}", 400);
+        }
+        
+        // ОБЯЗАТЕЛЬНЫЕ ПОЛЯ
         portfolio.date = j["date"];
-        portfolio.passportSeries = j["passport_series"];
-        portfolio.passportNumber = j["passport_number"];
-        portfolio.description = j["description"];
-        portfolio.filePath = j["file_path"];
+        
+        // ОБРАБОТКА decree - теперь INTEGER в БД
+        if (j.contains("decree")) {
+            if (j["decree"].is_number()) {
+                portfolio.decree = j["decree"].get<int>(); // ИСПРАВЛЕНО: напрямую получаем int
+            } else if (j["decree"].is_string()) {
+                try {
+                    portfolio.decree = std::stoi(j["decree"].get<std::string>()); // ИСПРАВЛЕНО: преобразуем строку в int
+                } catch (const std::exception& e) {
+                    return createJsonResponse("{\"success\": false, \"error\": \"Неверный формат decree\"}", 400);
+                }
+            } else {
+                return createJsonResponse("{\"success\": false, \"error\": \"Неверный тип decree\"}", 400);
+            }
+        } else {
+            return createJsonResponse("{\"success\": false, \"error\": \"Отсутствует decree\"}", 400);
+        }
+        
+        std::cout << "📦 Данные портфолио - student_code: " << portfolio.studentCode 
+                  << ", date: " << portfolio.date 
+                  << ", decree: " << portfolio.decree << std::endl;
         
         if (dbService.addPortfolio(portfolio)) {
             json response;
@@ -53,12 +88,38 @@ std::string ApiService::handleUpdatePortfolio(const std::string& body, int portf
         }
         
         // Обновляем только переданные поля
-        if (j.contains("student_code")) portfolio.studentCode = j["student_code"];
-        if (j.contains("date")) portfolio.date = j["date"];
-        if (j.contains("passport_series")) portfolio.passportSeries = j["passport_series"];
-        if (j.contains("passport_number")) portfolio.passportNumber = j["passport_number"];
-        if (j.contains("description")) portfolio.description = j["description"];
-        if (j.contains("file_path")) portfolio.filePath = j["file_path"];
+        if (j.contains("student_code")) {
+            if (j["student_code"].is_number()) {
+                portfolio.studentCode = j["student_code"].get<int>();
+            } else if (j["student_code"].is_string()) {
+                try {
+                    portfolio.studentCode = std::stoi(j["student_code"].get<std::string>());
+                } catch (const std::exception& e) {
+                    std::cout << "❌ Ошибка преобразования student_code: " << e.what() << std::endl;
+                    return createJsonResponse("{\"success\": false, \"error\": \"Неверный формат student_code\"}", 400);
+                }
+            }
+        }
+        
+        if (j.contains("date")) {
+            portfolio.date = j["date"];
+        }
+        
+        if (j.contains("decree")) {
+            if (j["decree"].is_number()) {
+                portfolio.decree = j["decree"].get<int>(); // ИСПРАВЛЕНО: напрямую получаем int
+            } else if (j["decree"].is_string()) {
+                try {
+                    portfolio.decree = std::stoi(j["decree"].get<std::string>()); // ИСПРАВЛЕНО: преобразуем строку в int
+                } catch (const std::exception& e) {
+                    return createJsonResponse("{\"success\": false, \"error\": \"Неверный формат decree\"}", 400);
+                }
+            }
+        }
+        
+        std::cout << "📦 Обновленные данные портфолио - student_code: " << portfolio.studentCode 
+                  << ", date: " << portfolio.date 
+                  << ", decree: " << portfolio.decree << std::endl;
         
         if (dbService.updatePortfolio(portfolio)) {
             json response;
@@ -90,6 +151,7 @@ std::string ApiService::handleDeletePortfolio(int portfolioId, const std::string
         return createJsonResponse("{\"success\": false, \"error\": \"Ошибка удаления портфолио\"}", 500);
     }
 }
+
 // Event handlers - ИСПРАВЛЕННЫЕ (используем eventCategoryId вместо eventCategory)
 std::string ApiService::handleAddEvent(const std::string& body, const std::string& sessionToken) {
     std::cout << "➕ Добавление события..." << std::endl;
@@ -102,16 +164,33 @@ std::string ApiService::handleAddEvent(const std::string& body, const std::strin
         json j = json::parse(body);
         Event event;
         
-        event.measureCode = j["measure_code"];
-        event.eventCategoryId = j["event_category_id"]; // ИСПРАВЛЕНО: используем eventCategoryId
+        // ОБЯЗАТЕЛЬНЫЕ ПОЛЯ из структуры БД
+        if (j.contains("measure_code")) {
+            if (j["measure_code"].is_number()) {
+                event.measureCode = j["measure_code"].get<int>();
+            } else if (j["measure_code"].is_string()) {
+                try {
+                    event.measureCode = std::stoi(j["measure_code"].get<std::string>());
+                } catch (const std::exception& e) {
+                    return createJsonResponse("{\"success\": false, \"error\": \"Неверный формат measure_code\"}", 400);
+                }
+            } else {
+                return createJsonResponse("{\"success\": false, \"error\": \"Неверный тип measure_code\"}", 400);
+            }
+        } else {
+            return createJsonResponse("{\"success\": false, \"error\": \"Отсутствует measure_code\"}", 400);
+        }
+        
+        event.eventCategory = j["event_category"];
         event.eventType = j["event_type"];
         event.startDate = j["start_date"];
         event.endDate = j["end_date"];
-        event.location = j["location"];
-        event.lore = j["lore"];
-        event.maxParticipants = j["max_participants"];
-        event.currentParticipants = j["current_participants"];
-        event.status = j["status"];
+        event.location = j.value("location", "");
+        event.lore = j.value("lore", "");
+        
+        std::cout << "📅 Данные события - measure_code: " << event.measureCode 
+                  << ", category: " << event.eventCategory
+                  << ", type: " << event.eventType << std::endl;
         
         if (dbService.addEvent(event)) {
             json response;
@@ -142,17 +221,25 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId, 
             return createJsonResponse("{\"success\": false, \"error\": \"Событие не найдено\"}", 404);
         }
         
-        // Обновляем только переданные поля - ИСПРАВЛЕНО: используем eventCategoryId
-        if (j.contains("measure_code")) event.measureCode = j["measure_code"];
-        if (j.contains("event_category_id")) event.eventCategoryId = j["event_category_id"];
+        // Обновляем только переданные поля
+        if (j.contains("measure_code")) {
+            if (j["measure_code"].is_number()) {
+                event.measureCode = j["measure_code"].get<int>();
+            } else if (j["measure_code"].is_string()) {
+                try {
+                    event.measureCode = std::stoi(j["measure_code"].get<std::string>());
+                } catch (const std::exception& e) {
+                    return createJsonResponse("{\"success\": false, \"error\": \"Неверный формат measure_code\"}", 400);
+                }
+            }
+        }
+        
+        if (j.contains("event_category")) event.eventCategory = j["event_category"];
         if (j.contains("event_type")) event.eventType = j["event_type"];
         if (j.contains("start_date")) event.startDate = j["start_date"];
         if (j.contains("end_date")) event.endDate = j["end_date"];
         if (j.contains("location")) event.location = j["location"];
         if (j.contains("lore")) event.lore = j["lore"];
-        if (j.contains("max_participants")) event.maxParticipants = j["max_participants"];
-        if (j.contains("current_participants")) event.currentParticipants = j["current_participants"];
-        if (j.contains("status")) event.status = j["status"];
         
         if (dbService.updateEvent(event)) {
             json response;
@@ -198,7 +285,7 @@ std::string ApiService::handleAddEventCategory(const std::string& body, const st
         EventCategory category;
         
         category.name = j["name"];
-        category.description = j["description"];
+        category.description = j.value("description", "");
         
         if (dbService.addEventCategory(category)) {
             json response;

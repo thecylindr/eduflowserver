@@ -570,8 +570,8 @@ private:
                 std::cout << Colors::CYAN << "   👤 " << tr("student_id") << ": " << Colors::WHITE << portfolio.studentCode << Colors::RESET << std::endl;
                 std::cout << Colors::CYAN << "   📊 " << tr("measure_code") << ": " << Colors::WHITE << portfolio.measureCode << Colors::RESET << std::endl;
                 std::cout << Colors::CYAN << "   📅 " << tr("date") << ": " << Colors::WHITE << portfolio.date << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   🆔 " << tr("passport_series") << ": " << Colors::WHITE << portfolio.passportSeries << Colors::RESET << std::endl;
-                std::cout << Colors::CYAN << "   🔢 " << tr("passport_number") << ": " << Colors::WHITE << portfolio.passportNumber << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   📜 " << tr("decree") << ": " << Colors::WHITE << portfolio.decree << Colors::RESET << std::endl;
+                std::cout << Colors::CYAN << "   🧑 " << tr("student_name") << ": " << Colors::WHITE << portfolio.studentName << Colors::RESET << std::endl;
                 std::cout << std::endl;
             }
         } else {
