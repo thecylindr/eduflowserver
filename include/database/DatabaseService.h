@@ -41,6 +41,8 @@ public:
     bool updateStudent(const Student& student);
     bool deleteStudent(int studentId);
     Student getStudentById(int studentId);
+    int getStudentCountInGroup(int groupId);
+    bool syncStudentCounts();
     
     // Group management
     std::vector<StudentGroup> getGroups();

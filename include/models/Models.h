@@ -94,23 +94,23 @@ struct PasswordResetToken {
     std::chrono::system_clock::time_point createdAt;
 };
 
-// ЕДИНСТВЕННОЕ ОПРЕДЕЛЕНИЕ StudentPortfolio
 struct StudentPortfolio {
     int portfolioId;
     int studentCode;
-    std::string measureCode;
+    int measureCode;       
+    std::string studentName;
     std::string date;
     std::string passportSeries;
     std::string passportNumber;
     std::string description;
     std::string filePath;
-    std::string studentName;
 };
 
 // ЕДИНСТВЕННОЕ ОПРЕДЕЛЕНИЕ Event
 struct Event {
     int eventId;
-    std::string eventCategory;
+    int measureCode;       
+    int eventCategoryId;   
     std::string categoryName;
     std::string eventType;
     std::string startDate;

@@ -1,8 +1,8 @@
 {
-    "database": "eduflow",
+    "database": "student_db",
     "host": "localhost",
     "language": "en",
-    "password": "12345678901",
+    "password": "eduflow",
     "port": 5432,
-    "username": "postgres"
+    "username": "student_app"
 }

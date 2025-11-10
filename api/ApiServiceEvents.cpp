@@ -17,7 +17,6 @@ std::string ApiService::handleAddPortfolio(const std::string& body, const std::s
         StudentPortfolio portfolio;
         
         portfolio.studentCode = j["student_code"];
-        portfolio.measureCode = j["measure_code"];
         portfolio.date = j["date"];
         portfolio.passportSeries = j["passport_series"];
         portfolio.passportNumber = j["passport_number"];
@@ -55,7 +54,6 @@ std::string ApiService::handleUpdatePortfolio(const std::string& body, int portf
         
         // Обновляем только переданные поля
         if (j.contains("student_code")) portfolio.studentCode = j["student_code"];
-        if (j.contains("measure_code")) portfolio.measureCode = j["measure_code"];
         if (j.contains("date")) portfolio.date = j["date"];
         if (j.contains("passport_series")) portfolio.passportSeries = j["passport_series"];
         if (j.contains("passport_number")) portfolio.passportNumber = j["passport_number"];
@@ -92,8 +90,7 @@ std::string ApiService::handleDeletePortfolio(int portfolioId, const std::string
         return createJsonResponse("{\"success\": false, \"error\": \"Ошибка удаления портфолио\"}", 500);
     }
 }
-
-// Event handlers
+// Event handlers - ИСПРАВЛЕННЫЕ (используем eventCategoryId вместо eventCategory)
 std::string ApiService::handleAddEvent(const std::string& body, const std::string& sessionToken) {
     std::cout << "➕ Добавление события..." << std::endl;
     
@@ -105,7 +102,8 @@ std::string ApiService::handleAddEvent(const std::string& body, const std::strin
         json j = json::parse(body);
         Event event;
         
-        event.eventCategory = j["event_category"];
+        event.measureCode = j["measure_code"];
+        event.eventCategoryId = j["event_category_id"]; // ИСПРАВЛЕНО: используем eventCategoryId
         event.eventType = j["event_type"];
         event.startDate = j["start_date"];
         event.endDate = j["end_date"];
@@ -144,8 +142,9 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId, 
             return createJsonResponse("{\"success\": false, \"error\": \"Событие не найдено\"}", 404);
         }
         
-        // Обновляем только переданные поля
-        if (j.contains("event_category")) event.eventCategory = j["event_category"];
+        // Обновляем только переданные поля - ИСПРАВЛЕНО: используем eventCategoryId
+        if (j.contains("measure_code")) event.measureCode = j["measure_code"];
+        if (j.contains("event_category_id")) event.eventCategoryId = j["event_category_id"];
         if (j.contains("event_type")) event.eventType = j["event_type"];
         if (j.contains("start_date")) event.startDate = j["start_date"];
         if (j.contains("end_date")) event.endDate = j["end_date"];
@@ -185,7 +184,6 @@ std::string ApiService::handleDeleteEvent(int eventId, const std::string& sessio
         return createJsonResponse("{\"success\": false, \"error\": \"Ошибка удаления события\"}", 500);
     }
 }
-
 
 // Event Category handlers
 std::string ApiService::handleAddEventCategory(const std::string& body, const std::string& sessionToken) {

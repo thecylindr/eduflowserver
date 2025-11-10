@@ -483,6 +483,7 @@ std::vector<Student> DatabaseService::getStudents() {
     return students;
 }
 
+// Student management - с автоматическим обновлением счетчика студентов
 bool DatabaseService::addStudent(const Student& student) {
     configManager.loadConfig(currentConfig);
     
@@ -490,6 +491,17 @@ bool DatabaseService::addStudent(const Student& student) {
         return false;
     }
     
+    // Начинаем транзакцию
+    PGresult* beginRes = PQexec(connection, "BEGIN");
+    if (PQresultStatus(beginRes) != PGRES_COMMAND_OK) {
+        PQclear(beginRes);
+        return false;
+    }
+    PQclear(beginRes);
+    
+    bool success = true;
+    
+    // 1. Добавляем студента
     std::string sql = "INSERT INTO students (last_name, first_name, middle_name, phone_number, email, group_id, passport_series, passport_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)";
     const char* params[8] = {
         student.lastName.c_str(),
@@ -503,8 +515,35 @@ bool DatabaseService::addStudent(const Student& student) {
     };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        success = false;
+        std::cerr << "Ошибка добавления студента: " << PQerrorMessage(connection) << std::endl;
+    }
     PQclear(res);
+    
+    // 2. Обновляем счетчик студентов в группе
+    if (success && student.groupId > 0) {
+        std::string updateSql = "UPDATE student_groups SET student_count = student_count + 1 WHERE group_id = $1";
+        const char* updateParams[1] = { std::to_string(student.groupId).c_str() };
+        
+        PGresult* updateRes = PQexecParams(connection, updateSql.c_str(), 1, NULL, updateParams, NULL, NULL, 0);
+        if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
+            success = false;
+            std::cerr << "Ошибка обновления счетчика группы: " << PQerrorMessage(connection) << std::endl;
+        }
+        PQclear(updateRes);
+    }
+    
+    // Завершаем транзакцию
+    if (success) {
+        PGresult* commitRes = PQexec(connection, "COMMIT");
+        PQclear(commitRes);
+        std::cout << "✅ Студент добавлен, счетчик группы обновлен" << std::endl;
+    } else {
+        PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
+        PQclear(rollbackRes);
+        std::cerr << "❌ Ошибка при добавлении студента, транзакция откатана" << std::endl;
+    }
     
     return success;
 }
@@ -516,6 +555,23 @@ bool DatabaseService::updateStudent(const Student& student) {
         return false;
     }
     
+    // Получаем текущие данные студента для определения старой группы
+    Student oldStudent = getStudentById(student.studentCode);
+    if (oldStudent.studentCode == 0) {
+        return false;
+    }
+    
+    // Начинаем транзакцию
+    PGresult* beginRes = PQexec(connection, "BEGIN");
+    if (PQresultStatus(beginRes) != PGRES_COMMAND_OK) {
+        PQclear(beginRes);
+        return false;
+    }
+    PQclear(beginRes);
+    
+    bool success = true;
+    
+    // 1. Обновляем данные студента
     std::string sql = "UPDATE students SET last_name = $1, first_name = $2, middle_name = $3, phone_number = $4, email = $5, group_id = $6, passport_series = $7, passport_number = $8 WHERE student_code = $9";
     const char* params[9] = {
         student.lastName.c_str(),
@@ -530,8 +586,56 @@ bool DatabaseService::updateStudent(const Student& student) {
     };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 9, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        success = false;
+        std::cerr << "Ошибка обновления студента: " << PQerrorMessage(connection) << std::endl;
+    }
     PQclear(res);
+    
+    // 2. Обновляем счетчики студентов в группах (если группа изменилась)
+    if (success && oldStudent.groupId != student.groupId) {
+        // Уменьшаем счетчик в старой группе (если была группа)
+        if (oldStudent.groupId > 0) {
+            std::string decreaseSql = "UPDATE student_groups SET student_count = student_count - 1 WHERE group_id = $1";
+            const char* decreaseParams[1] = { std::to_string(oldStudent.groupId).c_str() };
+            
+            PGresult* decreaseRes = PQexecParams(connection, decreaseSql.c_str(), 1, NULL, decreaseParams, NULL, NULL, 0);
+            if (PQresultStatus(decreaseRes) != PGRES_COMMAND_OK) {
+                success = false;
+                std::cerr << "Ошибка уменьшения счетчика старой группы: " << PQerrorMessage(connection) << std::endl;
+            }
+            PQclear(decreaseRes);
+        }
+        
+        // Увеличиваем счетчик в новой группе (если указана новая группа)
+        if (success && student.groupId > 0) {
+            std::string increaseSql = "UPDATE student_groups SET student_count = student_count + 1 WHERE group_id = $1";
+            const char* increaseParams[1] = { std::to_string(student.groupId).c_str() };
+            
+            PGresult* increaseRes = PQexecParams(connection, increaseSql.c_str(), 1, NULL, increaseParams, NULL, NULL, 0);
+            if (PQresultStatus(increaseRes) != PGRES_COMMAND_OK) {
+                success = false;
+                std::cerr << "Ошибка увеличения счетчика новой группы: " << PQerrorMessage(connection) << std::endl;
+            }
+            PQclear(increaseRes);
+        }
+        
+        if (success) {
+            std::cout << "🔄 Счетчики групп обновлены: старая группа " << oldStudent.groupId 
+                      << " -> новая группа " << student.groupId << std::endl;
+        }
+    }
+    
+    // Завершаем транзакцию
+    if (success) {
+        PGresult* commitRes = PQexec(connection, "COMMIT");
+        PQclear(commitRes);
+        std::cout << "✅ Студент обновлен" << std::endl;
+    } else {
+        PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
+        PQclear(rollbackRes);
+        std::cerr << "❌ Ошибка при обновлении студента, транзакция откатана" << std::endl;
+    }
     
     return success;
 }
@@ -543,12 +647,143 @@ bool DatabaseService::deleteStudent(int studentCode) {
         return false;
     }
     
+    // Получаем данные студента для определения группы
+    Student student = getStudentById(studentCode);
+    if (student.studentCode == 0) {
+        return false;
+    }
+    
+    // Начинаем транзакцию
+    PGresult* beginRes = PQexec(connection, "BEGIN");
+    if (PQresultStatus(beginRes) != PGRES_COMMAND_OK) {
+        PQclear(beginRes);
+        return false;
+    }
+    PQclear(beginRes);
+    
+    bool success = true;
+    
+    // 1. Удаляем студента
     std::string sql = "DELETE FROM students WHERE student_code = $1";
     const char* params[1] = { std::to_string(studentCode).c_str() };
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        success = false;
+        std::cerr << "Ошибка удаления студента: " << PQerrorMessage(connection) << std::endl;
+    }
     PQclear(res);
+    
+    // 2. Обновляем счетчик студентов в группе (если студент был в группе)
+    if (success && student.groupId > 0) {
+        std::string updateSql = "UPDATE student_groups SET student_count = student_count - 1 WHERE group_id = $1";
+        const char* updateParams[1] = { std::to_string(student.groupId).c_str() };
+        
+        PGresult* updateRes = PQexecParams(connection, updateSql.c_str(), 1, NULL, updateParams, NULL, NULL, 0);
+        if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
+            success = false;
+            std::cerr << "Ошибка обновления счетчика группы: " << PQerrorMessage(connection) << std::endl;
+        }
+        PQclear(updateRes);
+        
+        if (success) {
+            std::cout << "🔽 Счетчик группы " << student.groupId << " уменьшен на 1" << std::endl;
+        }
+    }
+    
+    // Завершаем транзакцию
+    if (success) {
+        PGresult* commitRes = PQexec(connection, "COMMIT");
+        PQclear(commitRes);
+        std::cout << "✅ Студент удален" << std::endl;
+    } else {
+        PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
+        PQclear(rollbackRes);
+        std::cerr << "❌ Ошибка при удалении студента, транзакция откатана" << std::endl;
+    }
+    
+    return success;
+}
+
+// Вспомогательный метод для получения количества студентов в группе
+int DatabaseService::getStudentCountInGroup(int groupId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return 0;
+    }
+    
+    std::string sql = "SELECT COUNT(*) FROM students WHERE group_id = $1";
+    const char* params[1] = { std::to_string(groupId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return 0;
+    }
+    
+    int count = std::stoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+    
+    return count;
+}
+
+// Метод для синхронизации счетчиков студентов во всех группах
+bool DatabaseService::syncStudentCounts() {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    // Начинаем транзакцию
+    PGresult* beginRes = PQexec(connection, "BEGIN");
+    if (PQresultStatus(beginRes) != PGRES_COMMAND_OK) {
+        PQclear(beginRes);
+        return false;
+    }
+    PQclear(beginRes);
+    
+    bool success = true;
+    
+    // Получаем все группы
+    std::vector<StudentGroup> groups = getGroups();
+    
+    for (const auto& group : groups) {
+        // Получаем актуальное количество студентов в группе
+        int actualCount = getStudentCountInGroup(group.groupId);
+        
+        // Обновляем счетчик в таблице групп
+        std::string sql = "UPDATE student_groups SET student_count = $1 WHERE group_id = $2";
+        const char* params[2] = {
+            std::to_string(actualCount).c_str(),
+            std::to_string(group.groupId).c_str()
+        };
+        
+        PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+            success = false;
+            std::cerr << "Ошибка синхронизации счетчика для группы " << group.groupId 
+                      << ": " << PQerrorMessage(connection) << std::endl;
+        }
+        PQclear(res);
+        
+        if (success) {
+            std::cout << "🔄 Группа " << group.groupId << ": " << group.studentCount 
+                      << " -> " << actualCount << " студентов" << std::endl;
+        }
+    }
+    
+    // Завершаем транзакцию
+    if (success) {
+        PGresult* commitRes = PQexec(connection, "COMMIT");
+        PQclear(commitRes);
+        std::cout << "✅ Синхронизация счетчиков студентов завершена" << std::endl;
+    } else {
+        PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
+        PQclear(rollbackRes);
+        std::cerr << "❌ Ошибка при синхронизации счетчиков, транзакция откатана" << std::endl;
+    }
     
     return success;
 }
@@ -865,7 +1100,7 @@ std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
         StudentPortfolio portfolio;
         portfolio.portfolioId = std::stoi(PQgetvalue(res, i, 0));
         portfolio.studentCode = std::stoi(PQgetvalue(res, i, 1));
-        portfolio.measureCode = PQgetvalue(res, i, 2);
+        portfolio.measureCode = std::stoi(PQgetvalue(res, i, 2)); // measure_code теперь integer
         portfolio.date = PQgetvalue(res, i, 3);
         portfolio.passportSeries = PQgetvalue(res, i, 4);
         portfolio.passportNumber = PQgetvalue(res, i, 5);
@@ -892,15 +1127,16 @@ bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
         return false;
     }
     
+    // measure_code не передаем - генерируется автоматически
     std::string sql = R"(
         INSERT INTO student_portfolio 
-        (student_code, measure_code, date, passport_series, passport_number, description, file_path) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (student_code, date, passport_series, passport_number, description, file_path) 
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING measure_code
     )";
     
-    const char* params[7] = {
+    const char* params[6] = {
         std::to_string(portfolio.studentCode).c_str(),
-        portfolio.measureCode.c_str(),
         portfolio.date.c_str(),
         portfolio.passportSeries.c_str(),
         portfolio.passportNumber.c_str(),
@@ -908,10 +1144,14 @@ bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
         portfolio.filePath.c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_TUPLES_OK);
     
-    if (!success) {
+    if (success) {
+        // Получаем сгенерированный measure_code
+        int generatedMeasureCode = std::stoi(PQgetvalue(res, 0, 0));
+        std::cout << "✅ Портфолио добавлено с measure_code: " << generatedMeasureCode << std::endl;
+    } else {
         std::cerr << "Ошибка добавления портфолио: " << PQerrorMessage(connection) << std::endl;
     }
     
@@ -928,14 +1168,13 @@ bool DatabaseService::updatePortfolio(const StudentPortfolio& portfolio) {
     
     std::string sql = R"(
         UPDATE student_portfolio 
-        SET student_code = $1, measure_code = $2, date = $3, passport_series = $4, 
-            passport_number = $5, description = $6, file_path = $7
-        WHERE portfolio_id = $8
+        SET student_code = $1, date = $2, passport_series = $3, 
+            passport_number = $4, description = $5, file_path = $6
+        WHERE portfolio_id = $7
     )";
     
-    const char* params[8] = {
+    const char* params[7] = {
         std::to_string(portfolio.studentCode).c_str(),
-        portfolio.measureCode.c_str(),
         portfolio.date.c_str(),
         portfolio.passportSeries.c_str(),
         portfolio.passportNumber.c_str(),
@@ -944,7 +1183,7 @@ bool DatabaseService::updatePortfolio(const StudentPortfolio& portfolio) {
         std::to_string(portfolio.portfolioId).c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
@@ -1001,7 +1240,7 @@ StudentPortfolio DatabaseService::getPortfolioById(int portfolioId) {
     
     portfolio.portfolioId = std::stoi(PQgetvalue(res, 0, 0));
     portfolio.studentCode = std::stoi(PQgetvalue(res, 0, 1));
-    portfolio.measureCode = PQgetvalue(res, 0, 2);
+    portfolio.measureCode = std::stoi(PQgetvalue(res, 0, 2)); // ИСПРАВЛЕНО: добавлен std::stoi
     portfolio.date = PQgetvalue(res, 0, 3);
     portfolio.passportSeries = PQgetvalue(res, 0, 4);
     portfolio.passportNumber = PQgetvalue(res, 0, 5);
@@ -1021,13 +1260,14 @@ std::vector<Event> DatabaseService::getEvents() {
         return events;
     }
     
-    // Обновленный запрос с JOIN для категорий
+    // Обновленный запрос с JOIN для категорий и measure_code
     std::string sql = R"(
-        SELECT e.event_id, e.event_category, ec.name as category_name, 
-               e.event_type, e.start_date, e.end_date, e.location, e.lore,
-               e.max_participants, e.current_participants, e.status
+        SELECT e.event_id, e.measure_code, e.event_category_id, 
+               ec.name as category_name, e.event_type, e.start_date, 
+               e.end_date, e.location, e.lore, e.max_participants, 
+               e.current_participants, e.status
         FROM event e
-        LEFT JOIN event_category ec ON e.event_category = ec.event_category_id
+        LEFT JOIN event_category ec ON e.event_category_id = ec.event_category_id
         ORDER BY e.start_date DESC
     )";
     
@@ -1042,16 +1282,17 @@ std::vector<Event> DatabaseService::getEvents() {
     for (int i = 0; i < rows; i++) {
         Event event;
         event.eventId = std::stoi(PQgetvalue(res, i, 0));
-        event.eventCategory = PQgetvalue(res, i, 1);
-        event.categoryName = PQgetvalue(res, i, 2);
-        event.eventType = PQgetvalue(res, i, 3);
-        event.startDate = PQgetvalue(res, i, 4);
-        event.endDate = PQgetvalue(res, i, 5);
-        event.location = PQgetvalue(res, i, 6);
-        event.lore = PQgetvalue(res, i, 7);
-        event.maxParticipants = std::stoi(PQgetvalue(res, i, 8));
-        event.currentParticipants = std::stoi(PQgetvalue(res, i, 9));
-        event.status = PQgetvalue(res, i, 10);
+        event.measureCode = std::stoi(PQgetvalue(res, i, 1)); // связь с портфолио
+        event.eventCategoryId = std::stoi(PQgetvalue(res, i, 2));
+        event.categoryName = PQgetvalue(res, i, 3);
+        event.eventType = PQgetvalue(res, i, 4);
+        event.startDate = PQgetvalue(res, i, 5);
+        event.endDate = PQgetvalue(res, i, 6);
+        event.location = PQgetvalue(res, i, 7);
+        event.lore = PQgetvalue(res, i, 8);
+        event.maxParticipants = std::stoi(PQgetvalue(res, i, 9));
+        event.currentParticipants = std::stoi(PQgetvalue(res, i, 10));
+        event.status = PQgetvalue(res, i, 11);
         
         events.push_back(event);
     }
@@ -1069,13 +1310,14 @@ bool DatabaseService::addEvent(const Event& event) {
     
     std::string sql = R"(
         INSERT INTO event 
-        (event_category, event_type, start_date, end_date, location, lore, 
-         max_participants, current_participants, status) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (measure_code, event_category_id, event_type, start_date, end_date, 
+         location, lore, max_participants, current_participants, status) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     )";
     
-    const char* params[9] = {
-        event.eventCategory.c_str(),
+    const char* params[10] = {
+        std::to_string(event.measureCode).c_str(),
+        std::to_string(event.eventCategoryId).c_str(),
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
@@ -1086,7 +1328,7 @@ bool DatabaseService::addEvent(const Event& event) {
         event.status.c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 9, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 10, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
@@ -1106,13 +1348,15 @@ bool DatabaseService::updateEvent(const Event& event) {
     
     std::string sql = R"(
         UPDATE event 
-        SET event_category = $1, event_type = $2, start_date = $3, end_date = $4, 
-            location = $5, lore = $6, max_participants = $7, current_participants = $8, status = $9
-        WHERE event_id = $10
+        SET measure_code = $1, event_category_id = $2, event_type = $3, 
+            start_date = $4, end_date = $5, location = $6, lore = $7, 
+            max_participants = $8, current_participants = $9, status = $10
+        WHERE event_id = $11
     )";
     
-    const char* params[10] = {
-        event.eventCategory.c_str(),
+    const char* params[11] = {
+        std::to_string(event.measureCode).c_str(),
+        std::to_string(event.eventCategoryId).c_str(),
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
@@ -1124,7 +1368,7 @@ bool DatabaseService::updateEvent(const Event& event) {
         std::to_string(event.eventId).c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 10, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 11, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
@@ -1165,8 +1409,9 @@ Event DatabaseService::getEventById(int eventId) {
     }
     
     std::string sql = R"(
-        SELECT event_id, event_category, event_type, start_date, end_date, 
-               location, lore, max_participants, current_participants, status
+        SELECT event_id, measure_code, event_category_id, event_type, 
+               start_date, end_date, location, lore, max_participants, 
+               current_participants, status
         FROM event 
         WHERE event_id = $1
     )";
@@ -1180,15 +1425,16 @@ Event DatabaseService::getEventById(int eventId) {
     }
     
     event.eventId = std::stoi(PQgetvalue(res, 0, 0));
-    event.eventCategory = PQgetvalue(res, 0, 1);
-    event.eventType = PQgetvalue(res, 0, 2);
-    event.startDate = PQgetvalue(res, 0, 3);
-    event.endDate = PQgetvalue(res, 0, 4);
-    event.location = PQgetvalue(res, 0, 5);
-    event.lore = PQgetvalue(res, 0, 6);
-    event.maxParticipants = std::stoi(PQgetvalue(res, 0, 7));
-    event.currentParticipants = std::stoi(PQgetvalue(res, 0, 8));
-    event.status = PQgetvalue(res, 0, 9);
+    event.measureCode = std::stoi(PQgetvalue(res, 0, 1));
+    event.eventCategoryId = std::stoi(PQgetvalue(res, 0, 2));
+    event.eventType = PQgetvalue(res, 0, 3);
+    event.startDate = PQgetvalue(res, 0, 4);
+    event.endDate = PQgetvalue(res, 0, 5);
+    event.location = PQgetvalue(res, 0, 6);
+    event.lore = PQgetvalue(res, 0, 7);
+    event.maxParticipants = std::stoi(PQgetvalue(res, 0, 8));
+    event.currentParticipants = std::stoi(PQgetvalue(res, 0, 9));
+    event.status = PQgetvalue(res, 0, 10);
     
     PQclear(res);
     return event;
