@@ -300,3 +300,67 @@ std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
     std::cout << "✅ Отправлено портфолио: " << response["data"].size() << " записей" << std::endl;
     return createJsonResponse(response.dump());
 }
+
+std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
+    std::cout << "📊 Получение данных для дашборда..." << std::endl;
+    
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
+    }
+    
+    try {
+        // Получаем информацию о пользователе
+        std::string userId = getUserIdFromSession(sessionToken);
+        User user = dbService.getUserById(std::stoi(userId));
+        
+        if (user.userId == 0) {
+            return createJsonResponse("{\"success\": false, \"error\": \"User not found\"}", 404);
+        }
+        
+        // Получаем статистику
+        std::lock_guard<std::mutex> lock(dbMutex);
+        
+        int teachersCount = dbService.getTeachersCount();
+        int studentsCount = dbService.getStudentsCount();
+        int groupsCount = dbService.getGroupsCount();
+        int portfoliosCount = dbService.getPortfoliosCount();
+        int eventsCount = dbService.getEventsCount();
+        
+        std::cout << "📈 Статистика дашборда - " 
+                  << "Преподаватели: " << teachersCount << ", "
+                  << "Студенты: " << studentsCount << ", "
+                  << "Группы: " << groupsCount << ", "
+                  << "Портфолио: " << portfoliosCount << ", "
+                  << "События: " << eventsCount << std::endl;
+        
+        // Формируем ответ
+        json dashboardData;
+        dashboardData["user"] = {
+            {"login", user.login},
+            {"firstName", user.firstName},
+            {"lastName", user.lastName},
+            {"email", user.email}
+        };
+        
+        dashboardData["stats"] = {
+            {"teachers", teachersCount},
+            {"students", studentsCount},
+            {"groups", groupsCount},
+            {"portfolios", portfoliosCount},
+            {"events", eventsCount}
+        };
+        
+        dashboardData["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        
+        json response;
+        response["success"] = true;
+        response["data"] = dashboardData;
+        
+        return createJsonResponse(response.dump());
+        
+    } catch (const std::exception& e) {
+        std::cout << "💥 Ошибка получения данных дашборда: " << e.what() << std::endl;
+        return createJsonResponse("{\"success\": false, \"error\": \"Dashboard data error\"}", 500);
+    }
+}

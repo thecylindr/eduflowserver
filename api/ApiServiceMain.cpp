@@ -745,6 +745,15 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 errorResponse["error"] = "Invalid or expired token";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
+        
+        } else if (method == "GET" && path == "/dashboard") {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            return handleGetDashboard(sessionToken);
         } else if (method == "GET" && path == "/session-info") {
             return getSessionInfo(sessionToken);
         } else if (method == "GET" && path == "/profile") {

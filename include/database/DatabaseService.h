@@ -17,6 +17,13 @@ public:
     void disconnect();
     bool testConnection();
     bool setupDatabase();
+
+    // DashBoard info
+    int getTeachersCount();
+    int getStudentsCount();
+    int getGroupsCount();
+    int getPortfoliosCount();
+    int getEventsCount();
     
     // User management
     bool addUser(const User& user);

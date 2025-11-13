@@ -68,6 +68,8 @@ public:
     std::string processRequestFromRaw(const std::string& rawRequest, const std::string& clientIP = "");
     std::string handleRevokeSessionByToken(const std::string& targetToken, const std::string& sessionToken);
     
+    std::string handleGetDashboard(const std::string& sessionToken);
+
     // Authentication
     std::string handleRegister(const std::string& body, const std::string& clientInfo = "");
     std::string handleLogin(const std::string& body, const std::string& clientInfo = "");
