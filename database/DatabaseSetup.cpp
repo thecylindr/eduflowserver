@@ -100,7 +100,7 @@ bool DatabaseService::setupDatabase() {
         "CREATE TABLE IF NOT EXISTS event ("
         "id SERIAL PRIMARY KEY,"
         "event_id INTEGER REFERENCES student_portfolio(measure_code),"
-        "event_category VARCHAR(24) NOT NULL UNIQUE,"
+        "event_decode SERIAL UNIQUE,"
         "event_type VARCHAR(48) NOT NULL,"
         "start_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
         "end_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
@@ -108,7 +108,7 @@ bool DatabaseService::setupDatabase() {
         "lore TEXT)",
         
         "CREATE TABLE IF NOT EXISTS event_categories ("
-        "event_type VARCHAR(24) REFERENCES event(event_category),"
+        "event_code INTEGER REFERENCES event(event_decode),"
         "category VARCHAR(64))",
         
         "CREATE TABLE IF NOT EXISTS users ("

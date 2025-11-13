@@ -3,3 +3,5 @@ build/
 build/*
 .vscode/*
 config.json
+database_config.json
+api_config.json``

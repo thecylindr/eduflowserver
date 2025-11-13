@@ -133,7 +133,7 @@ public:
 
     std::string getEventCategoriesJson(const std::string& sessionToken);
     std::string handleUpdateEventCategory(const std::string& body, const std::string& eventType, const std::string& sessionToken);
-    std::string handleDeleteEventCategory(const std::string& eventType, const std::string& sessionToken);
+    std::string handleDeleteEventCategory(int eventCode, const std::string& sessionToken);
     std::string handleUpdateEventCategory(const std::string& body, int categoryId, const std::string& sessionToken);
 
 };

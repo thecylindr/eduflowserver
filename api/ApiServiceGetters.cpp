@@ -265,7 +265,7 @@ std::string ApiService::getEventCategoriesJson(const std::string& sessionToken) 
     
     for (const auto& category : categories) {
         json categoryJson;
-        categoryJson["event_type"] = category.eventType;
+        categoryJson["event_code"] = category.eventCode;
         categoryJson["category"] = category.category;
         
         response["data"].push_back(categoryJson);

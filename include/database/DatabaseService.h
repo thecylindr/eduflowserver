@@ -57,7 +57,7 @@ public:
     
     // Event management
     std::vector<Event> getEvents();
-    bool addEvent(const Event& event);
+    bool addEvent(Event& event);
     
     // Specializations management
     std::vector<Specialization> getSpecializations();
@@ -96,7 +96,9 @@ public:
     bool addEventCategory(const EventCategory& category);
     EventCategory getEventCategoryByType(const std::string& eventType);
     bool updateEventCategory(const EventCategory& category);
-    bool deleteEventCategory(const std::string& eventType);
+    bool deleteEventCategory(int eventCode);
+
+    EventCategory getEventCategoryByCode(int eventCode);
     
 private:
     void executeSQL(const std::string& sql);

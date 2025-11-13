@@ -663,7 +663,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
     std::regex sessionTokenRegex("^/sessions/([a-fA-F0-9]+)$");
     std::regex eventRegex("^/events/(\\d+)$");
     std::regex portfolioRegex("^/portfolio/(\\d+)$");
-    std::regex eventCategoryRegex("^/event-categories/(.+)$");
+    std::regex eventCategoryRegex("^/event-categories/(\\d+)$");
     std::smatch matches;
     
     try {
@@ -1051,7 +1051,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
             }
             int eventId = std::stoi(matches[1]);
             return handleDeleteEvent(eventId, sessionToken);
-        }else if (method == "GET" && path == "/event-categories") {
+        } else if (method == "GET" && path == "/event-categories") {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
                 errorResponse["success"] = false;
@@ -1076,8 +1076,8 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            std::string eventType = matches[1];
-            return handleUpdateEventCategory(body, eventType, sessionToken);
+            int eventCode = std::stoi(matches[1]);  // ИЗВЛЕКАЕМ ЧИСЛО
+            return handleUpdateEventCategory(body, eventCode, sessionToken);
         }
         else if (method == "DELETE" && std::regex_match(path, matches, eventCategoryRegex)) {
             if (!validateSession(sessionToken)) {
@@ -1086,9 +1086,29 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            std::string eventType = matches[1];
-            return handleDeleteEventCategory(eventType, sessionToken);
+            int eventCode = std::stoi(matches[1]);  // ИЗВЛЕКАЕМ ЧИСЛО
+            return handleDeleteEventCategory(eventCode, sessionToken);
+        } else if (method == "PUT" && std::regex_match(path, matches, eventCategoryRegex)) {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            int eventCode = std::stoi(matches[1]);
+            return handleUpdateEventCategory(body, eventCode, sessionToken);
         }
+        else if (method == "DELETE" && std::regex_match(path, matches, eventCategoryRegex)) {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            int eventCode = std::stoi(matches[1]);
+            return handleDeleteEventCategory(eventCode, sessionToken);
+        }
+        
         
         // 🏠 СТАТУС СЕРВЕРА
         else if (method == "GET" && path == "/status") {
