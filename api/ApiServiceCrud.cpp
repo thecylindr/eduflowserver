@@ -597,13 +597,12 @@ std::string ApiService::getEventsJson(const std::string& sessionToken) {
         json eventJson;
         eventJson["id"] = event.eventId;
         eventJson["event_id"] = event.measureCode;
-        eventJson["event_decode"] = event.eventDecode;  // добавьте это поле
-        eventJson["event_type"] = event.eventType;      // ИСПРАВЛЕНИЕ: используем eventType вместо eventCategory
+        eventJson["event_type"] = event.eventType;
+        eventJson["category"] = event.category;
         eventJson["start_date"] = event.startDate;
         eventJson["end_date"] = event.endDate;
         eventJson["location"] = event.location;
-        eventJson["lore"] = event.lore;
-        eventJson["category"] = event.category;         // ИСПРАВЛЕНИЕ: используем category для полного наименования
+        eventJson["lore"] = event.lore;        
         
         response["data"].push_back(eventJson);
     }

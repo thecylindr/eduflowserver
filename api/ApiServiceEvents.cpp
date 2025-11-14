@@ -152,12 +152,15 @@ std::string ApiService::handleDeletePortfolio(int portfolioId, const std::string
     }
 }
 
-// Event handlers - ИСПРАВЛЕННЫЕ (используем eventCategoryId вместо eventCategory)
 std::string ApiService::handleAddEvent(const std::string& body, const std::string& sessionToken) {
-    std::cout << "➕ Добавление события..." << std::endl;
-    
+    std::cout << "🔄 Обработка добавления события..." << std::endl;
+    std::cout << "📦 Тело запроса: " << body << std::endl;
+
     if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Unauthorized";
+        return createJsonResponse(errorResponse.dump(), 401);
     }
     
     try {
@@ -165,82 +168,101 @@ std::string ApiService::handleAddEvent(const std::string& body, const std::strin
         Event event;
         
         // Обязательные поля
-        event.measureCode = j["event_id"];
+        if (!j.contains("event_type") || !j.contains("start_date")) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Поля 'event_type' и 'start_date' обязательны";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
         event.eventType = j["event_type"];
         event.startDate = j["start_date"];
-        event.endDate = j["end_date"];
+        event.endDate = j.value("end_date", "");
         event.location = j.value("location", "");
         event.lore = j.value("lore", "");
+        event.measureCode = j.value("event_id", 0);
         
-        // Новое поле для категории
-        if (j.contains("category")) {
+        // 🔥 УПРОЩЕНИЕ: Просто сохраняем категорию в объект Event
+        if (j.contains("category") && !j["category"].is_null()) {
             event.category = j["category"];
+            std::cout << "🏷️ Категория события: " << event.category << std::endl;
         }
         
-        std::cout << "📅 Данные события - event_id: " << event.measureCode 
-                  << ", type: " << event.eventType 
-                  << ", category: " << event.category << std::endl;
+        std::cout << "📅 Добавление события: " << event.eventType << std::endl;
         
+        // Добавляем событие в БД
         if (dbService.addEvent(event)) {
+            std::cout << "✅ Событие успешно добавлено" << std::endl;
+            
             json response;
             response["success"] = true;
-            response["message"] = "Событие успешно добавлено";
-            return createJsonResponse(response.dump());
+            response["message"] = "Событие успешно добавлено!";
+            
+            return createJsonResponse(response.dump(), 201);
         } else {
-            return createJsonResponse("{\"success\": false, \"error\": \"Ошибка добавления события\"}", 500);
+            std::cout << "❌ Ошибка при добавлении события в БД" << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Ошибка при добавлении события";
+            return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
-        std::cout << "💥 Ошибка добавления события: " << e.what() << std::endl;
-        return createJsonResponse("{\"success\": false, \"error\": \"Неверный формат запроса\"}", 400);
+        std::cout << "💥 EXCEPTION в handleAddEvent: " << e.what() << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Неверный формат запроса: " + std::string(e.what());
+        return createJsonResponse(errorResponse.dump(), 400);
     }
 }
 
-// В функции handleUpdateEvent добавить использование sessionToken или убрать его
 std::string ApiService::handleUpdateEvent(const std::string& body, int eventId, const std::string& sessionToken) {
     std::cout << "🔄 Обработка обновления события ID: " << eventId << std::endl;
-    std::cout << "📦 Тело запроса: " << body << std::endl;
-    
-    // ДОБАВИТЬ ПРОВЕРКУ СЕССИИ (если нужно) ИЛИ УБРАТЬ ПАРАМЕТР
+
     if (!validateSession(sessionToken)) {
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Unauthorized";
         return createJsonResponse(errorResponse.dump(), 401);
     }
-
+    
     try {
         json j = json::parse(body);
         
-        // Получаем текущее событие
-        Event existingEvent = dbService.getEventById(eventId);
-        if (existingEvent.eventId == 0) {
+        // Получаем текущие данные события
+        Event event = dbService.getEventById(eventId);
+        
+        if (event.eventId == 0) {
             std::cout << "❌ Событие не найдено: " << eventId << std::endl;
             json errorResponse;
             errorResponse["success"] = false;
             errorResponse["error"] = "Событие не найдено";
             return createJsonResponse(errorResponse.dump(), 404);
         }
-
+        
+        std::cout << "📅 Обновление события ID: " << eventId << std::endl;
+        
         // Обновляем поля
-        if (j.contains("event_id")) existingEvent.measureCode = j["event_id"];
-        if (j.contains("event_type")) existingEvent.eventType = j["event_type"];
-        if (j.contains("start_date")) existingEvent.startDate = j["start_date"];
-        if (j.contains("end_date")) existingEvent.endDate = j["end_date"];
-        if (j.contains("location")) existingEvent.location = j["location"];
-        if (j.contains("lore")) existingEvent.lore = j["lore"];
-
-        // Обновляем в базе данных
-        if (dbService.updateEvent(existingEvent)) {
+        if (j.contains("event_type")) event.eventType = j["event_type"];
+        if (j.contains("start_date")) event.startDate = j["start_date"];
+        if (j.contains("end_date")) event.endDate = j["end_date"];
+        if (j.contains("location")) event.location = j["location"];
+        if (j.contains("lore")) event.lore = j["lore"];
+        if (j.contains("event_id")) event.measureCode = j["event_id"];
+        
+        // 🔥 УПРОЩЕНИЕ: Просто сохраняем категорию в объект Event
+        if (j.contains("category") && !j["category"].is_null()) {
+            event.category = j["category"];
+            std::cout << "🏷️ Обновление категории: " << event.category << std::endl;
+        } else {
+            event.category = ""; // Очищаем категорию если не передана
+        }
+        
+        if (dbService.updateEvent(event)) {
             std::cout << "✅ Событие успешно обновлено" << std::endl;
             
             json response;
             response["success"] = true;
             response["message"] = "Событие успешно обновлено";
-            response["data"] = {
-                {"event_id", existingEvent.eventId},
-                {"measure_code", existingEvent.measureCode},
-                {"event_type", existingEvent.eventType}
-            };
             
             return createJsonResponse(response.dump());
         } else {
@@ -250,12 +272,11 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId, 
             errorResponse["error"] = "Ошибка при обновлении события";
             return createJsonResponse(errorResponse.dump(), 500);
         }
-        
     } catch (const std::exception& e) {
         std::cout << "💥 EXCEPTION в handleUpdateEvent: " << e.what() << std::endl;
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Неверный формат запроса";
+        errorResponse["error"] = "Неверный формат запроса: " + std::string(e.what());
         return createJsonResponse(errorResponse.dump(), 400);
     }
 }

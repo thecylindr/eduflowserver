@@ -108,7 +108,7 @@ bool DatabaseService::setupDatabase() {
         "lore TEXT)",
         
         "CREATE TABLE IF NOT EXISTS event_categories ("
-        "event_code INTEGER REFERENCES event(event_decode),"
+        "event_code INTEGER PRIMARY KEY REFERENCES event(event_decode) ON DELETE CASCADE ON UPDATE CASCADE,"
         "category VARCHAR(64))",
         
         "CREATE TABLE IF NOT EXISTS users ("

@@ -64,7 +64,7 @@ public:
     
     // Event management
     std::vector<Event> getEvents();
-    bool addEvent(Event& event);
+    bool addEvent(const Event& event);
     
     // Specializations management
     std::vector<Specialization> getSpecializations();
