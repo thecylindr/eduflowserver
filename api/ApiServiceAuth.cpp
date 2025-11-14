@@ -32,6 +32,15 @@ std::string ApiService::handleRegister(const std::string& body, const std::strin
         
         std::cout << "👤 Registration attempt from " << clientIP << " - Username: " << username << ", Email: " << email << std::endl;
         
+        // ДОБАВЛЕНО: Проверка минимальной длины пароля
+        if (password.length() < 6) {
+            std::cout << "❌ Password too short from " << clientIP << ": " << email << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Пароль должен содержать не менее 6 символов";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
         // Проверка российских доменов почты
         std::vector<std::string> russianDomains = {
             "ya.ru", "yandex.ru", "mail.ru", "bk.ru", "list.ru",
@@ -218,13 +227,19 @@ std::string ApiService::handleLogin(const std::string& body, const std::string& 
         // Используем ОС из запроса вместо User-Agent
         std::string userOS = os;
         
-        // Остальной код без изменений...
+        // ИЗМЕНЕНО: Поиск пользователя по логину ИЛИ email
         User user = dbService.getUserByLogin(login);
+        if (user.userId == 0) {
+            // Если не нашли по логину, пробуем найти по email
+            user = dbService.getUserByEmail(login);
+        }
+        
+        // ИЗМЕНЕНО: Русская ошибка аутентификации
         if (user.userId == 0 || user.passwordHash != hashPassword(password)) {
             std::cout << "❌ Failed login attempt from " << ipAddress << " for user: " << login << std::endl;
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Invalid login or password";
+            errorResponse["error"] = "Неверный логин или пароль";  // ИЗМЕНЕНО НА РУССКИЙ
             return createJsonResponse(errorResponse.dump(), 401);
         }
         
@@ -322,6 +337,15 @@ std::string ApiService::handleResetPassword(const std::string& body) {
         std::string resetToken = j["resetToken"];
         std::string newPassword = j["newPassword"];
         std::cout << "🔑 Password reset attempt with token: " << resetToken.substr(0, 16) << "..." << std::endl;
+        
+        // ДОБАВЛЕНО: Проверка минимальной длины пароля
+        if (newPassword.length() < 6) {
+            std::cout << "❌ New password too short for reset token: " << resetToken.substr(0, 16) << "..." << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Пароль должен содержать не менее 6 символов";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
         
         std::string email;
         {
