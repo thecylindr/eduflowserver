@@ -664,6 +664,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
     std::regex eventRegex("^/events/(\\d+)$");
     std::regex portfolioRegex("^/portfolio/(\\d+)$");
     std::regex eventCategoryRegex("^/event-categories/(\\d+)$");
+    std::regex groupStudentsRegex("^/groups/(\\d+)/students$");
     std::smatch matches;
     
     try {
@@ -962,6 +963,15 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 return createJsonResponse(errorResponse.dump(), 401);
             }
             return getGroupsJson(sessionToken);
+        } else if (method == "GET" && std::regex_match(path, matches, groupStudentsRegex)) {
+            if (!validateSession(sessionToken)) {
+                json errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["error"] = "Unauthorized";
+                return createJsonResponse(errorResponse.dump(), 401);
+            }
+            int groupId = std::stoi(matches[1]);
+            return handleGetStudentsByGroup(groupId, sessionToken);
         } else if (method == "POST" && path == "/groups") {
             if (!validateSession(sessionToken)) {
                 json errorResponse;
@@ -1095,7 +1105,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 errorResponse["error"] = "Unauthorized";
                 return createJsonResponse(errorResponse.dump(), 401);
             }
-            int eventCode = std::stoi(matches[1]);  // ИЗВЛЕКАЕМ ЧИСЛО
+            int eventCode = std::stoi(matches[1]);
             return handleDeleteEventCategory(eventCode, sessionToken);
         } else if (method == "PUT" && std::regex_match(path, matches, eventCategoryRegex)) {
             if (!validateSession(sessionToken)) {
@@ -1116,6 +1126,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
             }
             int eventCode = std::stoi(matches[1]);
             return handleDeleteEventCategory(eventCode, sessionToken);
+            
         }
         
         

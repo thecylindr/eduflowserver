@@ -111,6 +111,7 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         teacherJson["email"] = teacher.email;
         teacherJson["phone_number"] = teacher.phoneNumber;
         
+        // Получаем специализации преподавателя
         auto specializations = dbService.getTeacherSpecializations(teacher.teacherId);
         json specArray = json::array();
         
@@ -128,7 +129,7 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         }
         
         teacherJson["specializations"] = specArray;
-        teacherJson["specialization"] = specNames;
+        teacherJson["specialization"] = specNames; // Для обратной совместимости
         
         teachersArray.push_back(teacherJson);
     }
@@ -202,27 +203,30 @@ std::string ApiService::getGroupsJson(const std::string& sessionToken) {
 }
 
 std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
+    std::cout << "📋 Получение списка уникальных специализаций..." << std::endl;
+    
     if (!validateSession(sessionToken)) {
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Unauthorized";
         return createJsonResponse(errorResponse.dump(), 401);
     }
-    
+
     std::lock_guard<std::mutex> lock(dbMutex);
-    auto specializations = dbService.getSpecializations();
-    json j = json::array();
-    
-    for (const auto& spec : specializations) {
+    auto uniqueNames = dbService.getUniqueSpecializationNames();  // Получаем уникальные имена из БД
+
+    json data = json::array();
+    for (const auto& name : uniqueNames) {
         json specJson;
-        specJson["code"] = spec.specializationCode;
-        specJson["name"] = spec.name;
-        j.push_back(specJson);
+        specJson["name"] = name;  // Возвращаем только имя для ComboBox
+        data.push_back(specJson);
     }
-    
+
     json response;
     response["success"] = true;
-    response["data"] = j;
+    response["data"] = data;
+
+    std::cout << "✅ Отправлено уникальных специализаций: " << data.size() << std::endl;
     return createJsonResponse(response.dump());
 }
 
@@ -326,13 +330,6 @@ std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
         int portfoliosCount = dbService.getPortfoliosCount();
         int eventsCount = dbService.getEventsCount();
         
-        std::cout << "📈 Статистика дашборда - " 
-                  << "Преподаватели: " << teachersCount << ", "
-                  << "Студенты: " << studentsCount << ", "
-                  << "Группы: " << groupsCount << ", "
-                  << "Портфолио: " << portfoliosCount << ", "
-                  << "События: " << eventsCount << std::endl;
-        
         // Формируем ответ
         json dashboardData;
         dashboardData["user"] = {
@@ -363,4 +360,36 @@ std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
         std::cout << "💥 Ошибка получения данных дашборда: " << e.what() << std::endl;
         return createJsonResponse("{\"success\": false, \"error\": \"Dashboard data error\"}", 500);
     }
+}
+
+std::string ApiService::handleGetStudentsByGroup(int groupId, const std::string& sessionToken) {
+    std::cout << "👥 Получение студентов группы ID: " << groupId << std::endl;
+
+    if (!validateSession(sessionToken)) {
+        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
+    }
+
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto students = dbService.getStudentsByGroup(groupId);
+    json j = json::array();
+
+    for (const auto& student : students) {
+        json studentJson;
+        studentJson["student_code"] = student.studentCode;
+        studentJson["last_name"] = student.lastName;
+        studentJson["first_name"] = student.firstName;
+        studentJson["middle_name"] = student.middleName;
+        studentJson["phone_number"] = student.phoneNumber;
+        studentJson["email"] = student.email;
+        studentJson["group_id"] = student.groupId;
+        studentJson["passport_series"] = student.passportSeries;
+        studentJson["passport_number"] = student.passportNumber;
+
+        j.push_back(studentJson);
+    }
+
+    json response;
+    response["success"] = true;
+    response["data"] = j;
+    return createJsonResponse(response.dump());
 }

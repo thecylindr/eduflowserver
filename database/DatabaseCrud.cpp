@@ -307,7 +307,6 @@
         
         return true;
     }
-
     bool DatabaseService::updateTeacher(const Teacher& teacher) {
         configManager.loadConfig(currentConfig);
         
@@ -402,19 +401,29 @@
             return false;
         }
         
-        // Получаем код специализации преподавателя
+        // 🔥 ИСПРАВЛЕНИЕ: Получаем код специализации преподавателя правильным способом
         Teacher teacher = getTeacherById(teacherId);
         if (teacher.teacherId == 0) {
             return false;
         }
         
+        std::cout << "🗑️ Удаление всех специализаций преподавателя ID: " << teacherId 
+                  << " (код специализации: " << teacher.specializationCode << ")" << std::endl;
+        
+        // 🔥 ИСПРАВЛЕНИЕ: Используем specializationCode вместо specialization
         std::string sql = "DELETE FROM specialization_list WHERE specialization = $1";
-        const char* params[1] = { teacher.specialization.c_str() };
+        const char* params[1] = { std::to_string(teacher.specializationCode).c_str() };
         
         PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
         bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-        PQclear(res);
         
+        if (success) {
+            std::cout << "✅ Все специализации преподавателя удалены" << std::endl;
+        } else {
+            std::cerr << "❌ Ошибка удаления специализаций: " << PQerrorMessage(connection) << std::endl;
+        }
+        
+        PQclear(res);
         return success;
     }
 
@@ -1039,32 +1048,49 @@
         return success;
     }
 
-    std::vector<Specialization> DatabaseService::getTeacherSpecializations(int teacherId) {
-        std::vector<Specialization> specializations;
-        configManager.loadConfig(currentConfig);
-        
-        if (!connection && !connect(currentConfig)) {
-            return specializations;
-        }
-        
-        // Получаем специализации преподавателя из таблицы specialization_list
-        std::string sql = "SELECT specialization, name FROM specialization_list WHERE specialization IN (SELECT specialization FROM teachers WHERE teacher_id = $1)";
-        const char* params[1] = { std::to_string(teacherId).c_str() };
-        
-        PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
-        if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-            int rows = PQntuples(res);
-            for (int i = 0; i < rows; i++) {
-                Specialization spec;
-                spec.specializationCode = std::stoi(PQgetvalue(res, i, 0));
-                spec.name = PQgetvalue(res, i, 1);
-                specializations.push_back(spec);
-            }
-        }
-        PQclear(res);
-        
+std::vector<Specialization> DatabaseService::getTeacherSpecializations(int teacherId) {
+    std::vector<Specialization> specializations;
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
         return specializations;
     }
+    
+    // Получаем код специализации преподавателя из таблицы teachers
+    std::string teacherSql = "SELECT specialization FROM teachers WHERE teacher_id = $1";
+    const char* teacherParams[1] = { std::to_string(teacherId).c_str() };
+    
+    PGresult* teacherRes = PQexecParams(connection, teacherSql.c_str(), 1, NULL, teacherParams, NULL, NULL, 0);
+    if (PQresultStatus(teacherRes) != PGRES_TUPLES_OK || PQntuples(teacherRes) == 0) {
+        PQclear(teacherRes);
+        return specializations;
+    }
+    
+    int specializationCode = std::stoi(PQgetvalue(teacherRes, 0, 0));
+    PQclear(teacherRes);
+    
+    if (specializationCode == 0) {
+        return specializations;
+    }
+    
+    // Получаем информацию о специализации
+    std::string specSql = "SELECT specialization, name FROM specialization_list WHERE specialization = $1";
+    const char* specParams[1] = { std::to_string(specializationCode).c_str() };
+    
+    PGresult* specRes = PQexecParams(connection, specSql.c_str(), 1, NULL, specParams, NULL, NULL, 0);
+    if (PQresultStatus(specRes) == PGRES_TUPLES_OK) {
+        int rows = PQntuples(specRes);
+        for (int i = 0; i < rows; i++) {
+            Specialization spec;
+            spec.specializationCode = std::stoi(PQgetvalue(specRes, i, 0));
+            spec.name = PQgetvalue(specRes, i, 1);
+            specializations.push_back(spec);
+        }
+    }
+    PQclear(specRes);
+    
+    return specializations;
+}
 
 
     // Portfolio management - полный CRUD
@@ -1673,3 +1699,92 @@
         PQclear(res);
         return count;
     }
+
+std::vector<Student> DatabaseService::getStudentsByGroup(int groupId) {
+    std::vector<Student> students;
+    configManager.loadConfig(currentConfig);
+
+    if (!connection && !connect(currentConfig)) {
+        return students;
+    }
+
+    std::string sql = "SELECT student_code, last_name, first_name, middle_name, phone_number, email, group_id, passport_series, passport_number FROM students WHERE group_id = $1";
+    const char* params[1] = { std::to_string(groupId).c_str() };
+
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return students;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        Student student;
+        student.studentCode = std::stoi(PQgetvalue(res, i, 0));
+        student.lastName = PQgetvalue(res, i, 1);
+        student.firstName = PQgetvalue(res, i, 2);
+        student.middleName = PQgetvalue(res, i, 3);
+        student.phoneNumber = PQgetvalue(res, i, 4);
+        student.email = PQgetvalue(res, i, 5);
+        student.groupId = std::stoi(PQgetvalue(res, i, 6));
+        student.passportSeries = PQgetvalue(res, i, 7);
+        student.passportNumber = PQgetvalue(res, i, 8);
+
+        students.push_back(student);
+    }
+
+    PQclear(res);
+    return students;
+}
+
+int DatabaseService::getSpecializationCodeByName(const std::string& name) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return 0;
+    }
+    
+    std::string sql = "SELECT specialization FROM specialization_list WHERE name = $1";
+    const char* params[1] = { name.c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return 0;
+    }
+    
+    int code = std::stoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+    
+    return code;
+}
+
+std::vector<std::string> DatabaseService::getUniqueSpecializationNames() {
+    std::vector<std::string> names;
+    configManager.loadConfig(currentConfig);
+
+    if (!connection && !connect(currentConfig)) {
+        return names;
+    }
+
+    std::string sql = "SELECT DISTINCT name FROM specialization_list ORDER BY name ASC;";  // DISTINCT для уникальности, ORDER BY для сортировки
+
+    PGresult* res = PQexec(connection, sql.c_str());
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Ошибка получения уникальных специализаций: " << PQerrorMessage(connection) << std::endl;
+        PQclear(res);
+        return names;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        std::string name = PQgetvalue(res, i, 0);
+        names.push_back(name);
+    }
+
+    PQclear(res);
+    return names;
+}

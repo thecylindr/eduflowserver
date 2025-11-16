@@ -41,6 +41,7 @@ public:
     bool deleteTeacher(int teacherId);
     bool removeAllTeacherSpecializations(int teacherId);
     Teacher getTeacherById(int teacherId);
+    std::vector<std::string> getUniqueSpecializationNames();
     
     // Student management
     std::vector<Student> getStudents();
@@ -65,10 +66,12 @@ public:
     // Event management
     std::vector<Event> getEvents();
     bool addEvent(const Event& event);
+    std::vector<Student> getStudentsByGroup(int groupId);
     
     // Specializations management
     std::vector<Specialization> getSpecializations();
     bool addSpecialization(const Specialization& specialization);
+    int getSpecializationCodeByName(const std::string& name);
     bool deleteSpecialization(int specializationCode);
     
     // Teacher specializations management

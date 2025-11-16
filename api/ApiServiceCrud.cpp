@@ -7,7 +7,6 @@ using json = nlohmann::json;
 std::string ApiService::handleAddTeacher(const std::string& body, const std::string& sessionToken) {
     std::cout << "🔄 Обработка добавления преподавателя..." << std::endl;
     std::cout << "📦 Тело запроса: " << body << std::endl;
-
     if (!validateSession(sessionToken)) {
         json errorResponse;
         errorResponse["success"] = false;
@@ -95,7 +94,6 @@ std::string ApiService::handleAddTeacher(const std::string& body, const std::str
 std::string ApiService::handleUpdateTeacher(const std::string& body, int teacherId, const std::string& sessionToken) {
     std::cout << "🔄 Обработка обновления преподавателя ID: " << teacherId << std::endl;
     std::cout << "📦 Тело запроса: " << body << std::endl;
-
     if (!validateSession(sessionToken)) {
         json errorResponse;
         errorResponse["success"] = false;
@@ -127,58 +125,63 @@ std::string ApiService::handleUpdateTeacher(const std::string& body, int teacher
         if (j.contains("email")) teacher.email = j["email"];
         if (j.contains("phone_number")) teacher.phoneNumber = j["phone_number"];
         
-        // Обновляем основные данные преподавателя
         if (dbService.updateTeacher(teacher)) {
             std::cout << "✅ Основные данные преподавателя обновлены" << std::endl;
             
-            // ОБНОВЛЯЕМ СПЕЦИАЛИЗАЦИИ - УПРОЩЕННАЯ ЛОГИКА
             if (j.contains("specialization")) {
                 std::string specializationStr = j["specialization"];
                 std::cout << "🔗 Обновление специализаций: " << specializationStr << std::endl;
                 
-                // Удаляем все текущие специализации преподавателя
-                if (dbService.removeAllTeacherSpecializations(teacherId)) {
-                    std::cout << "✅ Старые специализации удалены" << std::endl;
-                } else {
-                    std::cout << "⚠️ Не удалось удалить старые специализации" << std::endl;
-                }
+                // Получаем текущий код специализации преподавателя
+                int currentSpecCode = teacher.specializationCode;
+                std::cout << "🔑 Текущий код специализации: " << currentSpecCode << std::endl;
                 
-                // Добавляем новые специализации, если они есть
-                if (!specializationStr.empty()) {
-                    // Разделяем строку специализаций по запятой
-                    size_t start = 0, end = 0;
-                    std::vector<std::string> specNames;
-                    
-                    while ((end = specializationStr.find(',', start)) != std::string::npos) {
-                        std::string name = specializationStr.substr(start, end - start);
-                        // Удаляем пробелы
-                        name.erase(0, name.find_first_not_of(" \t\n\r\f\v"));
-                        name.erase(name.find_last_not_of(" \t\n\r\f\v") + 1);
-                        if (!name.empty()) {
-                            specNames.push_back(name);
-                        }
-                        start = end + 1;
-                    }
-                    // Добавляем последнюю специализацию
-                    std::string lastName = specializationStr.substr(start);
-                    lastName.erase(0, lastName.find_first_not_of(" \t\n\r\f\v"));
-                    lastName.erase(lastName.find_last_not_of(" \t\n\r\f\v") + 1);
-                    if (!lastName.empty()) {
-                        specNames.push_back(lastName);
+                if (currentSpecCode > 0) {
+                    // 🔥 УДАЛЯЕМ ВСЕ СТАРЫЕ СПЕЦИАЛИЗАЦИИ ЭТОГО ПРЕПОДАВАТЕЛЯ
+                    if (dbService.removeAllTeacherSpecializations(teacherId)) {
+                        std::cout << "✅ Старые специализации удалены" << std::endl;
+                    } else {
+                        std::cout << "⚠️ Не удалось удалить старые специализации" << std::endl;
                     }
                     
-                    // Добавляем новые специализации
-                    for (const auto& name : specNames) {
-                        Specialization spec;
-                        spec.specializationCode = teacher.specializationCode;
-                        spec.name = name;
+                    // 🔥 ДОБАВЛЯЕМ НОВЫЕ СПЕЦИАЛИЗАЦИИ (только если есть новые)
+                    if (!specializationStr.empty()) {
+                        // Разделяем строку специализаций по запятой
+                        size_t start = 0, end = 0;
+                        std::vector<std::string> specNames;
                         
-                        if (dbService.addSpecialization(spec)) {
-                            std::cout << "✅ Добавлена специализация: " << name << " (код: " << teacher.specializationCode << ")" << std::endl;
-                        } else {
-                            std::cout << "❌ Не удалось добавить специализацию: " << name << std::endl;
+                        while ((end = specializationStr.find(',', start)) != std::string::npos) {
+                            std::string name = specializationStr.substr(start, end - start);
+                            // Удаляем пробелы
+                            name.erase(0, name.find_first_not_of(" \t\n\r\f\v"));
+                            name.erase(name.find_last_not_of(" \t\n\r\f\v") + 1);
+                            if (!name.empty()) {
+                                specNames.push_back(name);
+                            }
+                            start = end + 1;
+                        }
+                        // Добавляем последнюю специализацию
+                        std::string lastName = specializationStr.substr(start);
+                        lastName.erase(0, lastName.find_first_not_of(" \t\n\r\f\v"));
+                        lastName.erase(lastName.find_last_not_of(" \t\n\r\f\v") + 1);
+                        if (!lastName.empty()) {
+                            specNames.push_back(lastName);
+                        }
+                        
+                        for (const auto& name : specNames) {
+                            Specialization spec;
+                            spec.specializationCode = currentSpecCode;
+                            spec.name = name;
+                            
+                            if (dbService.addSpecialization(spec)) {
+                                std::cout << "✅ Добавлена специализация: " << name << " (код: " << currentSpecCode << ")" << std::endl;
+                            } else {
+                                std::cout << "❌ Не удалось добавить специализацию: " << name << std::endl;
+                            }
                         }
                     }
+                } else {
+                    std::cout << "⚠️ У преподавателя нет кода специализации, пропускаем обновление специализаций" << std::endl;
                 }
             }
             

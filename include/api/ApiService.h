@@ -109,6 +109,7 @@ public:
     std::string handleAddGroup(const std::string& body, const std::string& sessionToken);
     std::string handleUpdateGroup(const std::string& body, int groupId, const std::string& sessionToken);
     std::string handleDeleteGroup(int groupId, const std::string& sessionToken);
+    std::string handleGetStudentsByGroup(int groupId, const std::string& sessionToken);
     std::string handleUpdateProfile(const std::string& body, const std::string& sessionToken);
     
     // Getters
