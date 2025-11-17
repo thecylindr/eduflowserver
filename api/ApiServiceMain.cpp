@@ -206,52 +206,131 @@ bool ApiService::start() {
 }
 
 void ApiService::stop() {
+    if (!running) return;
+    
+    std::cout << "🛑 Останавливаем API сервер..." << std::endl;
     running = false;
+    
+    // Закрываем серверный сокет чтобы прервать accept
     if (serverSocket != INVALID_SOCKET_VAL) {
+        // Создаем временное соединение чтобы разблокировать accept
+        SOCKET_TYPE tempSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (tempSocket != INVALID_SOCKET_VAL) {
+            sockaddr_in serverAddr;
+            memset(&serverAddr, 0, sizeof(serverAddr));
+            serverAddr.sin_family = AF_INET;
+            serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+            serverAddr.sin_port = htons(apiConfig.port);
+            
+            // Пытаемся подключиться чтобы разблокировать accept
+            connect(tempSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
+            
+            // Даем время на обработку
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            
+            CLOSE_SOCKET(tempSocket);
+        }
+        
+        // Теперь закрываем серверный сокет
         CLOSE_SOCKET(serverSocket);
+        serverSocket = INVALID_SOCKET_VAL;
     }
+    
+    // Ждем завершения потоков
     if (serverThread.joinable()) {
+        std::cout << "⏳ Ждем завершения серверного потока..." << std::endl;
         serverThread.join();
+        std::cout << "✅ Серверный поток завершен" << std::endl;
     }
+    
     if (cleanupThread.joinable()) {
+        std::cout << "⏳ Ждем завершения потока очистки..." << std::endl;
         cleanupThread.join();
+        std::cout << "✅ Поток очистки завершен" << std::endl;
     }
+    
+    std::cout << "✅ API сервер полностью остановлен" << std::endl;
 }
 
 void ApiService::runServer() {
+    std::cout << "🚀 Серверный поток запущен" << std::endl;
+    
     while (running) {
         sockaddr_in clientAddr;
         socklen_t addrLen = sizeof(clientAddr);
-        SOCKET_TYPE clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &addrLen);
         
-        if (clientSocket == INVALID_SOCKET_VAL) {
+        // Используем select для неблокирующего accept с таймаутом
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(serverSocket, &readfds);
+        
+        struct timeval timeout;
+        timeout.tv_sec = 1;  // Таймаут 1 секунда
+        timeout.tv_usec = 0;
+        
+        int activity = select(serverSocket + 1, &readfds, nullptr, nullptr, &timeout);
+        
+        if (activity < 0) {
 #ifdef _WIN32
             int err = WSAGetLastError();
-            if (err == WSAEWOULDBLOCK) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                continue;
+            if (err != WSAEINTR) {
+                std::cout << "❌ Ошибка select: " << err << std::endl;
             }
 #else
-            if (errno == EWOULDBLOCK || errno == EAGAIN) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                continue;
+            if (errno != EINTR) {
+                std::cout << "❌ Ошибка select: " << strerror(errno) << std::endl;
             }
 #endif
             continue;
         }
         
-        // Настраиваем клиентский сокет
-#ifdef _WIN32
-        u_long mode = 1;
-        ioctlsocket(clientSocket, FIONBIO, &mode);
-#else
-        int flags = fcntl(clientSocket, F_GETFL, 0);
-        fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK);
-#endif
+        // Проверяем, был ли остановлен сервер во время ожидания
+        if (!running) break;
         
-        handleClient(clientSocket);
+        if (activity == 0) {
+            // Таймаут - продолжаем цикл
+            continue;
+        }
+        
+        if (FD_ISSET(serverSocket, &readfds)) {
+            SOCKET_TYPE clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &addrLen);
+            
+            if (clientSocket == INVALID_SOCKET_VAL) {
+#ifdef _WIN32
+                int err = WSAGetLastError();
+                if (err == WSAEWOULDBLOCK) {
+                    continue;
+                }
+                if (err != WSAEINTR) {
+                    std::cout << "❌ Ошибка accept: " << err << std::endl;
+                }
+#else
+                if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                    continue;
+                }
+                if (errno != EINTR) {
+                    std::cout << "❌ Ошибка accept: " << strerror(errno) << std::endl;
+                }
+#endif
+                continue;
+            }
+            
+            // Настраиваем клиентский сокет
+#ifdef _WIN32
+            u_long mode = 1;
+            ioctlsocket(clientSocket, FIONBIO, &mode);
+#else
+            int flags = fcntl(clientSocket, F_GETFL, 0);
+            fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK);
+#endif
+            
+            handleClient(clientSocket);
+        }
     }
+    
+    std::cout << "🔴 Серверный поток завершает работу" << std::endl;
 }
+
 
 std::string ApiService::getClientInfo(SOCKET_TYPE clientSocket) {
 #ifdef _WIN32
@@ -385,11 +464,19 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
 }
 
 void ApiService::runCleanup() {
+    std::cout << "🧹 Поток очистки запущен" << std::endl;
+    
     while (running) {
         cleanupExpiredSessions();
         dbService.deleteExpiredSessions();
-        std::this_thread::sleep_for(std::chrono::minutes(5));
+        
+        // Используем прерываемый sleep
+        for (int i = 0; i < 300 && running; i++) { // 5 минут = 300 секунд
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
     }
+    
+    std::cout << "🔴 Поток очистки завершает работу" << std::endl;
 }
 
 std::string ApiService::processRequestFromRaw(const std::string& rawRequest, const std::string& clientIP) {
