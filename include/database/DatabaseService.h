@@ -51,6 +51,7 @@ public:
     Student getStudentById(int studentId);
     int getStudentCountInGroup(int groupId);
     bool syncStudentCounts();
+    std::vector<Student> getStudentsByGroup(int groupId);
     
     // Group management
     std::vector<StudentGroup> getGroups();
@@ -62,11 +63,16 @@ public:
     // Portfolio management
     std::vector<StudentPortfolio> getPortfolios();
     bool addPortfolio(const StudentPortfolio& portfolio);
+    bool updatePortfolio(const StudentPortfolio& portfolio);
+    bool deletePortfolio(int portfolioId);
+    StudentPortfolio getPortfolioById(int portfolioId);
     
     // Event management
     std::vector<Event> getEvents();
     bool addEvent(const Event& event);
-    std::vector<Student> getStudentsByGroup(int groupId);
+    bool updateEvent(const Event& event);
+    bool deleteEvent(int eventId);
+    Event getEventById(int eventId);
     
     // Specializations management
     std::vector<Specialization> getSpecializations();
@@ -78,6 +84,13 @@ public:
     bool addTeacherSpecialization(int teacherId, int specializationCode);
     bool removeTeacherSpecialization(int teacherId, int specializationCode);
     std::vector<Specialization> getTeacherSpecializations(int teacherId);
+    
+    // Event Category management
+    std::vector<EventCategory> getEventCategories();
+    bool addEventCategory(const EventCategory& category);
+    EventCategory getEventCategoryByCode(int eventCode);
+    bool updateEventCategory(const EventCategory& category);
+    bool deleteEventCategory(int eventCode);
     
     // Get current config
     DatabaseConfig getCurrentConfig() const { return currentConfig; }
@@ -94,22 +107,6 @@ public:
     std::vector<Session> getAllActiveSessions();
     bool deleteExpiredSessions();
 
-    bool updatePortfolio(const StudentPortfolio& portfolio);
-    bool deletePortfolio(int portfolioId);
-    StudentPortfolio getPortfolioById(int portfolioId);
-    
-    bool updateEvent(const Event& event);
-    bool deleteEvent(int eventId);
-    Event getEventById(int eventId);
-
-    std::vector<EventCategory> getEventCategories();
-    bool addEventCategory(const EventCategory& category);
-    EventCategory getEventCategoryByType(const std::string& eventType);
-    bool updateEventCategory(const EventCategory& category);
-    bool deleteEventCategory(int eventCode);
-
-    EventCategory getEventCategoryByCode(int eventCode);
-    
 private:
     void executeSQL(const std::string& sql);
     

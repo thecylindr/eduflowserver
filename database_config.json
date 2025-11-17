@@ -1,7 +1,7 @@
 {
     "database": "student_db",
     "host": "localhost",
-    "language": "en",
+    "language": "ru",
     "password": "eduflow",
     "port": 5432,
     "username": "student_app"

@@ -205,14 +205,56 @@ else()
     message(FATAL_ERROR "Missing required file: src/main.cpp")
 endif()
 
+# Database files - заменяем DatabaseCrud.cpp на разделенные файлы
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseSetup.cpp")
     list(APPEND SOURCES "database/DatabaseSetup.cpp")
     message(STATUS "Found: database/DatabaseSetup.cpp")
 endif()
 
+# Заменяем DatabaseCrud.cpp на разделенные файлы
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseUsers.cpp")
+    list(APPEND SOURCES "database/DatabaseUsers.cpp")
+    message(STATUS "Found: database/DatabaseUsers.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseTeachers.cpp")
+    list(APPEND SOURCES "database/DatabaseTeachers.cpp")
+    message(STATUS "Found: database/DatabaseTeachers.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseStudents.cpp")
+    list(APPEND SOURCES "database/DatabaseStudents.cpp")
+    message(STATUS "Found: database/DatabaseStudents.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseGroups.cpp")
+    list(APPEND SOURCES "database/DatabaseGroups.cpp")
+    message(STATUS "Found: database/DatabaseGroups.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseSpecializations.cpp")
+    list(APPEND SOURCES "database/DatabaseSpecializations.cpp")
+    message(STATUS "Found: database/DatabaseSpecializations.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabasePortfolios.cpp")
+    list(APPEND SOURCES "database/DatabasePortfolios.cpp")
+    message(STATUS "Found: database/DatabasePortfolios.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseEvents.cpp")
+    list(APPEND SOURCES "database/DatabaseEvents.cpp")
+    message(STATUS "Found: database/DatabaseEvents.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseStats.cpp")
+    list(APPEND SOURCES "database/DatabaseStats.cpp")
+    message(STATUS "Found: database/DatabaseStats.cpp")
+endif()
+
+# Старый DatabaseCrud.cpp - проверяем, но не включаем
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseCrud.cpp")
-    list(APPEND SOURCES "database/DatabaseCrud.cpp")
-    message(STATUS "Found: database/DatabaseCrud.cpp")
+    message(WARNING "Found old database/DatabaseCrud.cpp - this file should be replaced with the new modular files")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseSessions.cpp")
@@ -318,6 +360,9 @@ target_include_directories(StudentManagementSystem PRIVATE
     ${POSTGRESQL_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/database
+    ${CMAKE_CURRENT_SOURCE_DIR}/configs
+    ${CMAKE_CURRENT_SOURCE_DIR}/api
 )
 
 # Добавляем OpenSSL если найден
@@ -415,6 +460,7 @@ if(OPENSSL_FOUND)
 else()
     message(STATUS "OpenSSL: NOT FOUND - hash functions disabled")
 endif()
+message(STATUS "Database modules: Users, Teachers, Students, Groups, Specializations, Portfolios, Events, Stats")
 if(WIN32)
     message(STATUS "Output: ${CMAKE_BINARY_DIR}/StudentManagementSystem.exe")
     message(STATUS "DLL strategy: Copying required DLLs")
