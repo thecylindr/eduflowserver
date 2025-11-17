@@ -230,13 +230,7 @@ std::string ApiService::getSpecializationsJson(const std::string& sessionToken) 
     return createJsonResponse(response.dump());
 }
 
-std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::getTeacherSpecializationsJson(int teacherId) {
     
     std::lock_guard<std::mutex> lock(dbMutex);
     auto specializations = dbService.getTeacherSpecializations(teacherId);
@@ -255,12 +249,8 @@ std::string ApiService::getTeacherSpecializationsJson(int teacherId, const std::
     return createJsonResponse(response.dump());
 }
 
-std::string ApiService::getEventCategoriesJson(const std::string& sessionToken) {
+std::string ApiService::getEventCategoriesJson() {
     std::cout << "📋 Получение списка категорий событий..." << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     auto categories = dbService.getEventCategories();
     json response;
@@ -362,12 +352,8 @@ std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
     }
 }
 
-std::string ApiService::handleGetStudentsByGroup(int groupId, const std::string& sessionToken) {
+std::string ApiService::handleGetStudentsByGroup(int groupId) {
     std::cout << "👥 Получение студентов группы ID: " << groupId << std::endl;
-
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
 
     std::lock_guard<std::mutex> lock(dbMutex);
     auto students = dbService.getStudentsByGroup(groupId);

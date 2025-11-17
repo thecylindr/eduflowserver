@@ -50,15 +50,16 @@ private:
     void handleClient(SOCKET_TYPE clientSocket);
     void runCleanup();
     std::string processRequest(const std::string& method, const std::string& path,
-                               const std::string& body, const std::string& sessionToken,
-                               const std::string& clientInfo = "");
+                                const std::string& body,
+                                const std::string& sessionToken,
+                                const std::string& clientInfo = "");
     std::string createJsonResponse(const std::string& content, int statusCode = 200);
     std::string generateSessionToken();
     
     // Session management
     void cleanupExpiredSessions();
     void loadSessionsFromDB();
-    bool validateTokenInDatabase(const std::string& token); // Новая функция для проверки токена в БД
+    bool validateTokenInDatabase(const std::string& token);
 
 public:
     ApiService(DatabaseService& dbService);
@@ -91,25 +92,25 @@ public:
     std::string hashPassword(const std::string& password);
     
     // Specialization management
-    std::string handleAddSpecialization(const std::string& body, const std::string& sessionToken);
-    std::string handleDeleteSpecialization(int specializationCode, const std::string& sessionToken);
+    std::string handleAddSpecialization(const std::string& body);
+    std::string handleDeleteSpecialization(int specializationCode);
     
     // Teacher specialization management
-    std::string handleAddTeacherSpecialization(const std::string& body, const std::string& sessionToken);
-    std::string handleRemoveTeacherSpecialization(int teacherId, int specializationCode, const std::string& sessionToken);
-    std::string getTeacherSpecializationsJson(int teacherId, const std::string& sessionToken);
+    std::string handleAddTeacherSpecialization(const std::string& body);
+    std::string handleRemoveTeacherSpecialization(int teacherId, int specializationCode);
+    std::string getTeacherSpecializationsJson(int teacherId);
     
     // CRUD operations
-    std::string handleAddTeacher(const std::string& body, const std::string& sessionToken);
-    std::string handleUpdateTeacher(const std::string& body, int teacherId, const std::string& sessionToken);
-    std::string handleDeleteTeacher(int teacherId, const std::string& sessionToken);
-    std::string handleAddStudent(const std::string& body, const std::string& sessionToken);
-    std::string handleUpdateStudent(const std::string& body, int studentId, const std::string& sessionToken);
-    std::string handleDeleteStudent(int studentId, const std::string& sessionToken);
-    std::string handleAddGroup(const std::string& body, const std::string& sessionToken);
-    std::string handleUpdateGroup(const std::string& body, int groupId, const std::string& sessionToken);
-    std::string handleDeleteGroup(int groupId, const std::string& sessionToken);
-    std::string handleGetStudentsByGroup(int groupId, const std::string& sessionToken);
+    std::string handleAddTeacher(const std::string& body);
+    std::string handleUpdateTeacher(const std::string& body, int teacherId);
+    std::string handleDeleteTeacher(int teacherId);
+    std::string handleAddStudent(const std::string& body);
+    std::string handleUpdateStudent(const std::string& body, int studentId);
+    std::string handleDeleteStudent(int studentId);
+    std::string handleAddGroup(const std::string& body);
+    std::string handleUpdateGroup(const std::string& body, int groupId);
+    std::string handleDeleteGroup(int groupId);
+    std::string handleGetStudentsByGroup(int groupId);
     std::string handleUpdateProfile(const std::string& body, const std::string& sessionToken);
     
     // Getters
@@ -121,23 +122,23 @@ public:
     std::string handleStatus();
 
     // Portfolio
-    std::string handleAddPortfolio(const std::string& body, const std::string& sessionToken);
-    std::string handleUpdatePortfolio(const std::string& body, int portfolioId, const std::string& sessionToken);
-    std::string handleDeletePortfolio(int portfolioId, const std::string& sessionToken);
+    std::string handleAddPortfolio(const std::string& body);
+    std::string handleUpdatePortfolio(const std::string& body, int portfolioId);
+    std::string handleDeletePortfolio(int portfolioId);
     std::string getPortfolioJson(const std::string& sessionToken);
 
     // Event
-    std::string handleAddEvent(const std::string& body, const std::string& sessionToken);
-    std::string handleUpdateEvent(const std::string& body, int eventId, const std::string& sessionToken);
-    std::string handleDeleteEvent(int eventId, const std::string& sessionToken);
+    std::string handleAddEvent(const std::string& body);
+    std::string handleUpdateEvent(const std::string& body, int eventId);
+    std::string handleDeleteEvent(int eventId);
     std::string getEventsJson(const std::string& sessionToken);
 
-    std::string handleAddEventCategory(const std::string& body, const std::string& sessionToken);
+    std::string handleAddEventCategory(const std::string& body);
 
-    std::string getEventCategoriesJson(const std::string& sessionToken);
-    std::string handleUpdateEventCategory(const std::string& body, const std::string& eventType, const std::string& sessionToken);
-    std::string handleDeleteEventCategory(int eventCode, const std::string& sessionToken);
-    std::string handleUpdateEventCategory(const std::string& body, int categoryId, const std::string& sessionToken);
+    std::string getEventCategoriesJson();
+    std::string handleUpdateEventCategory(const std::string& body, const std::string& eventType);
+    std::string handleDeleteEventCategory(int eventCode);
+    std::string handleUpdateEventCategory(const std::string& body, int categoryId);
 
 };
 

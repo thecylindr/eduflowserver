@@ -4,15 +4,9 @@
 
 using json = nlohmann::json;
 
-std::string ApiService::handleAddTeacher(const std::string& body, const std::string& sessionToken) {
+std::string ApiService::handleAddTeacher(const std::string& body) {
     std::cout << "🔄 Обработка добавления преподавателя..." << std::endl;
     std::cout << "📦 Тело запроса: " << body << std::endl;
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -91,15 +85,9 @@ std::string ApiService::handleAddTeacher(const std::string& body, const std::str
     }
 }
 
-std::string ApiService::handleUpdateTeacher(const std::string& body, int teacherId, const std::string& sessionToken) {
+std::string ApiService::handleUpdateTeacher(const std::string& body, int teacherId) {
     std::cout << "🔄 Обработка обновления преподавателя ID: " << teacherId << std::endl;
     std::cout << "📦 Тело запроса: " << body << std::endl;
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -206,14 +194,7 @@ std::string ApiService::handleUpdateTeacher(const std::string& body, int teacher
     }
 }
 
-std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
-    
+std::string ApiService::handleDeleteTeacher(int teacherId) {
     std::cout << "👨‍🏫 Deleting teacher ID: " << teacherId << std::endl;
     
     if (dbService.deleteTeacher(teacherId)) {
@@ -231,16 +212,9 @@ std::string ApiService::handleDeleteTeacher(int teacherId, const std::string& se
     }
 }
 
-std::string ApiService::handleAddTeacherSpecialization(const std::string& body, const std::string& sessionToken) {
+std::string ApiService::handleAddTeacherSpecialization(const std::string& body) {
     std::cout << "🔄 Обработка добавления специализации преподавателю..." << std::endl;
     std::cout << "📦 Тело запроса: " << body << std::endl;
-
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
 
     try {
         json j = json::parse(body);
@@ -281,13 +255,7 @@ std::string ApiService::handleAddTeacherSpecialization(const std::string& body, 
     }
 }
 
-std::string ApiService::handleRemoveTeacherSpecialization(int teacherId, int specializationCode, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleRemoveTeacherSpecialization(int teacherId, int specializationCode) {
     
     std::cout << "🔗 Removing specialization " << specializationCode << " from teacher " << teacherId << std::endl;
     
@@ -304,13 +272,7 @@ std::string ApiService::handleRemoveTeacherSpecialization(int teacherId, int spe
     }
 }
 
-std::string ApiService::handleDeleteSpecialization(int specializationCode, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleDeleteSpecialization(int specializationCode) {
     
     std::cout << "🗑️ Deleting specialization with code: " << specializationCode << std::endl;
     
@@ -329,13 +291,7 @@ std::string ApiService::handleDeleteSpecialization(int specializationCode, const
     }
 }
 
-std::string ApiService::handleAddSpecialization(const std::string& body, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleAddSpecialization(const std::string& body) {
 
     try {
         json j = json::parse(body);
@@ -378,13 +334,7 @@ std::string ApiService::handleAddSpecialization(const std::string& body, const s
     }
 }
 
-std::string ApiService::handleAddStudent(const std::string& body, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleAddStudent(const std::string& body) {
     
     try {
         json j = json::parse(body);
@@ -418,13 +368,7 @@ std::string ApiService::handleAddStudent(const std::string& body, const std::str
     }
 }
 
-std::string ApiService::handleUpdateStudent(const std::string& body, int studentId, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleUpdateStudent(const std::string& body, int studentId) {
     
     try {
         json j = json::parse(body);
@@ -465,13 +409,7 @@ std::string ApiService::handleUpdateStudent(const std::string& body, int student
     }
 }
 
-std::string ApiService::handleDeleteStudent(int studentId, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleDeleteStudent(int studentId) {
     
     if (dbService.deleteStudent(studentId)) {
         json response;
@@ -486,13 +424,7 @@ std::string ApiService::handleDeleteStudent(int studentId, const std::string& se
     }
 }
 
-std::string ApiService::handleAddGroup(const std::string& body, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleAddGroup(const std::string& body) {
     
     try {
         json j = json::parse(body);
@@ -521,13 +453,7 @@ std::string ApiService::handleAddGroup(const std::string& body, const std::strin
     }
 }
 
-std::string ApiService::handleUpdateGroup(const std::string& body, int groupId, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleUpdateGroup(const std::string& body, int groupId) {
     
     try {
         json j = json::parse(body);
@@ -563,13 +489,7 @@ std::string ApiService::handleUpdateGroup(const std::string& body, int groupId, 
     }
 }
 
-std::string ApiService::handleDeleteGroup(int groupId, const std::string& sessionToken) {
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
+std::string ApiService::handleDeleteGroup(int groupId) {
     
     if (dbService.deleteGroup(groupId)) {
         json response;

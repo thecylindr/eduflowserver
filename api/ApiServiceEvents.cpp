@@ -5,12 +5,8 @@
 using json = nlohmann::json;
 
 // Portfolio handlers
-std::string ApiService::handleAddPortfolio(const std::string& body, const std::string& sessionToken) {
+std::string ApiService::handleAddPortfolio(const std::string& body) {
     std::cout << "➕ Добавление портфолио..." << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -72,12 +68,8 @@ std::string ApiService::handleAddPortfolio(const std::string& body, const std::s
     }
 }
 
-std::string ApiService::handleUpdatePortfolio(const std::string& body, int portfolioId, const std::string& sessionToken) {
+std::string ApiService::handleUpdatePortfolio(const std::string& body, int portfolioId) {
     std::cout << "🔄 Обновление портфолио ID: " << portfolioId << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -135,12 +127,8 @@ std::string ApiService::handleUpdatePortfolio(const std::string& body, int portf
     }
 }
 
-std::string ApiService::handleDeletePortfolio(int portfolioId, const std::string& sessionToken) {
+std::string ApiService::handleDeletePortfolio(int portfolioId) {
     std::cout << "🗑️ Удаление портфолио ID: " << portfolioId << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     if (dbService.deletePortfolio(portfolioId)) {
         json response;
@@ -152,16 +140,9 @@ std::string ApiService::handleDeletePortfolio(int portfolioId, const std::string
     }
 }
 
-std::string ApiService::handleAddEvent(const std::string& body, const std::string& sessionToken) {
+std::string ApiService::handleAddEvent(const std::string& body) {
     std::cout << "🔄 Обработка добавления события..." << std::endl;
     std::cout << "📦 Тело запроса: " << body << std::endl;
-
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -215,15 +196,8 @@ std::string ApiService::handleAddEvent(const std::string& body, const std::strin
     }
 }
 
-std::string ApiService::handleUpdateEvent(const std::string& body, int eventId, const std::string& sessionToken) {
+std::string ApiService::handleUpdateEvent(const std::string& body, int eventId) {
     std::cout << "🔄 Обработка обновления события ID: " << eventId << std::endl;
-
-    if (!validateSession(sessionToken)) {
-        json errorResponse;
-        errorResponse["success"] = false;
-        errorResponse["error"] = "Unauthorized";
-        return createJsonResponse(errorResponse.dump(), 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -281,12 +255,8 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId, 
     }
 }
 
-std::string ApiService::handleDeleteEvent(int eventId, const std::string& sessionToken) {
+std::string ApiService::handleDeleteEvent(int eventId) {
     std::cout << "🗑️ Удаление события ID: " << eventId << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     if (dbService.deleteEvent(eventId)) {
         json response;
@@ -299,12 +269,8 @@ std::string ApiService::handleDeleteEvent(int eventId, const std::string& sessio
 }
 
 // Event Category handlers
-std::string ApiService::handleAddEventCategory(const std::string& body, const std::string& sessionToken) {
+std::string ApiService::handleAddEventCategory(const std::string& body) {
     std::cout << "➕ Добавление категории события..." << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -340,12 +306,8 @@ std::string ApiService::handleAddEventCategory(const std::string& body, const st
     }
 }
 
-std::string ApiService::handleUpdateEventCategory(const std::string& body, int eventCode, const std::string& sessionToken) {
+std::string ApiService::handleUpdateEventCategory(const std::string& body, int eventCode) {
     std::cout << "🔄 Обновление категории события для event_code: " << eventCode << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     try {
         json j = json::parse(body);
@@ -377,12 +339,8 @@ std::string ApiService::handleUpdateEventCategory(const std::string& body, int e
     }
 }
 
-std::string ApiService::handleDeleteEventCategory(int eventCode, const std::string& sessionToken) {
+std::string ApiService::handleDeleteEventCategory(int eventCode) {
     std::cout << "🗑️ Удаление категории события для event_code: " << eventCode << std::endl;
-    
-    if (!validateSession(sessionToken)) {
-        return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
-    }
     
     if (dbService.deleteEventCategory(eventCode)) {
         json response;
