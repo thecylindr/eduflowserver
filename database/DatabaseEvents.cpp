@@ -50,17 +50,14 @@ bool DatabaseService::addEvent(const Event& event) {
         return false;
     }
     
-    // Предполагаем, что даты в формате YYYY-MM-DD; скорректируйте парсинг при необходимости
-    std::string startDate = event.startDate;
-    std::string endDate = event.endDate;
-    
+    // 🔥 ИСПРАВЛЕНИЕ: Правильные параметры для вставки
     std::string sql = "INSERT INTO event (event_id, event_type, start_date, end_date, location, lore) "
                       "VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, event_decode";
     const char* params[6] = {
-        std::to_string(event.measureCode).c_str(),
+        std::to_string(event.measureCode).c_str(),  // event_id = measure_code из портфолио
         event.eventType.c_str(),
-        startDate.c_str(),
-        endDate.c_str(),
+        event.startDate.c_str(),
+        event.endDate.c_str(),
         event.location.c_str(),
         event.lore.c_str()
     };
@@ -69,6 +66,8 @@ bool DatabaseService::addEvent(const Event& event) {
     
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
         std::cerr << "❌ Ошибка добавления события: " << PQerrorMessage(connection) << std::endl;
+        std::cerr << "   measureCode: " << event.measureCode << std::endl;
+        std::cerr << "   SQL: " << sql << std::endl;
         PQclear(res);
         return false;
     }
@@ -109,23 +108,27 @@ bool DatabaseService::updateEvent(const Event& event) {
         return false;
     }
     
-    std::string sql = "UPDATE event SET event_type = $1, start_date = $2, end_date = $3, location = $4, lore = $5 "
-                      "WHERE id = $6";
-    const char* params[6] = {
+    std::string sql = "UPDATE event SET event_type = $1, start_date = $2, end_date = $3, location = $4, lore = $5, event_id = $6 "
+                      "WHERE id = $7";
+    const char* params[7] = {
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
         event.location.c_str(),
         event.lore.c_str(),
+        std::to_string(event.measureCode).c_str(),
         std::to_string(event.eventId).c_str()
     };
     
-    PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     PQclear(res);
     
     if (!success) {
         std::cerr << "❌ Ошибка обновления события: " << PQerrorMessage(connection) << std::endl;
+        std::cerr << "   SQL: " << sql << std::endl;
+        std::cerr << "   measureCode: " << event.measureCode << std::endl;
+        std::cerr << "   eventId: " << event.eventId << std::endl;
         return false;
     }
     

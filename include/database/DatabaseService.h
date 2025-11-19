@@ -66,6 +66,7 @@ public:
     bool updatePortfolio(const StudentPortfolio& portfolio);
     bool deletePortfolio(int portfolioId);
     StudentPortfolio getPortfolioById(int portfolioId);
+    bool portfolioExists(int measureCode);
     
     // Event management
     std::vector<Event> getEvents();

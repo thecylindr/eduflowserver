@@ -148,6 +148,16 @@ std::string ApiService::handleAddEvent(const std::string& body) {
         json j = json::parse(body);
         Event event;
         
+        // 🔥 ИСПРАВЛЕНИЕ: Получаем measure_code вместо event_id
+        if (j.contains("measureCode")) {
+            event.measureCode = j["measureCode"];
+            std::cout << "✅ measureCode из запроса: " << event.measureCode << std::endl;
+        } else {
+            // 🔥 ИСПРАВЛЕНИЕ: Пробуем альтернативные поля
+            event.measureCode = j.value("event_id", j.value("event_code", 0));
+            std::cout << "⚠️ measureCode не найден, используем альтернативы: " << event.measureCode << std::endl;
+        }
+        
         // Обязательные поля
         if (!j.contains("event_type") || !j.contains("start_date")) {
             json errorResponse;
@@ -161,7 +171,22 @@ std::string ApiService::handleAddEvent(const std::string& body) {
         event.endDate = j.value("end_date", "");
         event.location = j.value("location", "");
         event.lore = j.value("lore", "");
-        event.measureCode = j.value("event_id", 0);
+        
+        // 🔥 ИСПРАВЛЕНИЕ: Проверяем существование портфолио
+        if (event.measureCode <= 0) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Неверный measureCode: должен быть положительным числом";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        // Проверяем существование портфолио
+        if (!dbService.portfolioExists(event.measureCode)) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Портфолио с measure_code " + std::to_string(event.measureCode) + " не найдено";
+            return createJsonResponse(errorResponse.dump(), 404);
+        }
         
         // 🔥 УПРОЩЕНИЕ: Просто сохраняем категорию в объект Event
         if (j.contains("category") && !j["category"].is_null()) {
@@ -169,7 +194,7 @@ std::string ApiService::handleAddEvent(const std::string& body) {
             std::cout << "🏷️ Категория события: " << event.category << std::endl;
         }
         
-        std::cout << "📅 Добавление события: " << event.eventType << std::endl;
+        std::cout << "📅 Добавление события для measure_code: " << event.measureCode << std::endl;
         
         // Добавляем событие в БД
         if (dbService.addEvent(event)) {
@@ -196,6 +221,23 @@ std::string ApiService::handleAddEvent(const std::string& body) {
     }
 }
 
+bool DatabaseService::portfolioExists(int measureCode) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "SELECT 1 FROM student_portfolio WHERE measure_code = $1";
+    const char* params[1] = { std::to_string(measureCode).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    bool exists = (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0);
+    
+    PQclear(res);
+    return exists;
+}
+
 std::string ApiService::handleUpdateEvent(const std::string& body, int eventId) {
     std::cout << "🔄 Обработка обновления события ID: " << eventId << std::endl;
     
@@ -215,21 +257,41 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId) 
         
         std::cout << "📅 Обновление события ID: " << eventId << std::endl;
         
-        // Обновляем поля
+        // 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Обновляем measureCode (связку с портфолио)
+        if (j.contains("measure_code")) {
+            if (j["measure_code"].is_number()) {
+                int newMeasureCode = j["measure_code"].get<int>();
+                // Проверяем существование портфолио
+                if (!dbService.portfolioExists(newMeasureCode)) {
+                    json errorResponse;
+                    errorResponse["success"] = false;
+                    errorResponse["error"] = "Портфолио с measure_code " + std::to_string(newMeasureCode) + " не найдено";
+                    return createJsonResponse(errorResponse.dump(), 404);
+                }
+                event.measureCode = newMeasureCode;
+                std::cout << "🔄 Обновлена связка с портфолио: " << event.measureCode << std::endl;
+            }
+        }
+        
+        // Обновляем остальные поля
         if (j.contains("event_type")) event.eventType = j["event_type"];
         if (j.contains("start_date")) event.startDate = j["start_date"];
         if (j.contains("end_date")) event.endDate = j["end_date"];
         if (j.contains("location")) event.location = j["location"];
         if (j.contains("lore")) event.lore = j["lore"];
-        if (j.contains("event_id")) event.measureCode = j["event_id"];
         
-        // 🔥 УПРОЩЕНИЕ: Просто сохраняем категорию в объект Event
+        // 🔥 ИСПРАВЛЕНИЕ: Обработка категории
         if (j.contains("category") && !j["category"].is_null()) {
             event.category = j["category"];
             std::cout << "🏷️ Обновление категории: " << event.category << std::endl;
         } else {
             event.category = ""; // Очищаем категорию если не передана
         }
+        
+        std::cout << "📦 Обновленные данные события - ID: " << event.eventId 
+                  << ", measureCode: " << event.measureCode 
+                  << ", eventType: " << event.eventType 
+                  << ", category: " << event.category << std::endl;
         
         if (dbService.updateEvent(event)) {
             std::cout << "✅ Событие успешно обновлено" << std::endl;
