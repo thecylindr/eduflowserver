@@ -8,7 +8,7 @@
     "rateLimitRequests": 100,
     "rateLimitWindow": 60,
     "resetTokenTimeoutMinutes": 60,
-    "sessionTimeoutHours": 24,
+    "sessionTimeoutHours": 72,
     "sslCertPath": "",
     "sslKeyPath": ""
 }
