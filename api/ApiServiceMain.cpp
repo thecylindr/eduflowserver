@@ -103,6 +103,25 @@ void ApiService::cleanupNetwork() {
 #endif
 }
 
+
+#include <string>
+std::string urlDecode(const std::string& encoded) {
+    std::string decoded;
+    for (size_t i = 0; i < encoded.length(); ++i) {
+        if (encoded[i] == '%' && i + 2 < encoded.length()) {
+            unsigned int hexValue; 
+            sscanf(encoded.substr(i + 1, 2).c_str(), "%x", &hexValue);
+            decoded += static_cast<char>(hexValue);
+            i += 2;
+        } else if (encoded[i] == '+') {
+            decoded += ' ';
+        } else {
+            decoded += encoded[i];
+        }
+    }
+    return decoded;
+}
+
 bool ApiService::start() {
     if (running) return true;
     
@@ -238,18 +257,12 @@ void ApiService::stop() {
     
     // Ждем завершения потоков
     if (serverThread.joinable()) {
-        std::cout << "⏳ Ждем завершения серверного потока..." << std::endl;
         serverThread.join();
-        std::cout << "✅ Серверный поток завершен" << std::endl;
     }
     
     if (cleanupThread.joinable()) {
-        std::cout << "⏳ Ждем завершения потока очистки..." << std::endl;
         cleanupThread.join();
-        std::cout << "✅ Поток очистки завершен" << std::endl;
     }
-    
-    std::cout << "✅ API сервер полностью остановлен" << std::endl;
 }
 
 void ApiService::runServer() {
@@ -747,6 +760,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
     std::regex sessionTokenRegex("^/sessions/([a-fA-F0-9]+)$");
     std::regex eventRegex("^/events/(\\d+)$");
     std::regex portfolioRegex("^/portfolio/(\\d+)$");
+    std::regex newsRegex("^/news/(\\d+)$");
     std::regex eventCategoryRegex("^/event-categories/(\\d+)$");
     std::regex groupStudentsRegex("^/groups/(\\d+)/students$");
     std::smatch matches;
@@ -754,8 +768,16 @@ std::string ApiService::processRequest(const std::string& method, const std::str
     try {
         std::cout << "🔄 Processing от " << clientIP << ": " << method << " " << path << std::endl;
         
+        if (method == "GET" && path == "/news") {
+            return handleGetNewsList();
+        } else if (method == "GET" && path.find("/news/") == 0) {
+            std::string encodedFilename = path.substr(6);
+            std::string filename = urlDecode(encodedFilename);
+            return handleGetNews(filename);
+        }
+
         // АУТЕНТИФИКАЦИЯ И РЕГИСТРАЦИЯ
-        if (method == "POST" && path == "/register") {
+        else if (method == "POST" && path == "/register") {
             return handleRegister(body, clientInfo);
         } else if (method == "POST" && path == "/login") {
             return handleLogin(body, clientInfo);
@@ -775,7 +797,7 @@ std::string ApiService::processRequest(const std::string& method, const std::str
                 } catch (const std::exception& e) {
                     std::cout << "⚠️ Не удалось распарсить тело verify-token запроса: " << e.what() << std::endl;
                 }
-            }
+            } 
             
             if (tokenToValidate.empty()) {
                 json errorResponse;

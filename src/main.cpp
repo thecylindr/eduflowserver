@@ -1,4 +1,4 @@
-// main.cpp - версия с цветным оформлением
+// main.cpp - версия с цветным оформлением и интегрированным редактором новостей
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -8,8 +8,10 @@
 #include "database/DatabaseService.h"
 #include "api/ApiService.h"
 #include "configs/ConfigManager.h"
+#include "article/ArticleEditor.h"
 #include "LocaleManager.h"
 
+#include <filesystem>
 #include <vector>
 #include <map>
 #include <chrono>
@@ -41,6 +43,7 @@ private:
     DatabaseService dbService;
     ApiService apiService;
     ConfigManager configManager;
+    ArticleEditor articleEditor;
     bool apiRunning = false;
     std::map<std::string, std::string> locale;
 
@@ -157,8 +160,9 @@ public:
             std::cout << Colors::CYAN << "1. ⚙️  " << tr("menu_db_setup") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "2. 🌐 " << tr("menu_api_setup") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "3. 🚀 " << tr("menu_api_manage") << Colors::RESET << std::endl;
-            std::cout << Colors::CYAN << "4. ℹ️   " << tr("menu_system_info") << Colors::RESET << std::endl;
-            std::cout << Colors::CYAN << "5. 🌍 " << tr("menu_change_language") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "4. 📰 " << tr("menu_news_editor") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "5. ℹ️   " << tr("menu_system_info") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "6. 🌍 " << tr("menu_change_language") << Colors::RESET << std::endl;
             std::cout << Colors::RED << "Q. 🚪 " << tr("menu_exit") << Colors::RESET << std::endl;
             
             std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
@@ -173,8 +177,10 @@ public:
             } else if (choice == "3") {
                 manageApi();
             } else if (choice == "4") {
-                showSystemInfo();
+                showNewsEditorMenu();
             } else if (choice == "5") {
+                showSystemInfo();
+            } else if (choice == "6") {
                 changeLanguage();
             } else if (choice == "Q" || choice == "q") {
                 exitApplication();
@@ -378,6 +384,7 @@ private:
                     std::cout << Colors::CYAN << "   👨‍🏫 GET /teachers  - " << Colors::WHITE << "Teachers management" << Colors::RESET << std::endl;
                     std::cout << Colors::CYAN << "   🎯 GET /groups     - " << Colors::WHITE << "Groups management" << Colors::RESET << std::endl;
                     std::cout << Colors::CYAN << "   📁 GET /portfolio  - " << Colors::WHITE << "Portfolio management" << Colors::RESET << std::endl;
+                    std::cout << Colors::CYAN << "   📰 GET /news       - " << Colors::WHITE << "News articles (read-only)" << Colors::RESET << std::endl;
                 } else {
                     showError(tr("api_start_error"));
                 }
@@ -407,6 +414,7 @@ private:
         std::cout << std::endl << Colors::MAGENTA << "🚀 Main Features:" << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   • " << Colors::WHITE << "Database Management" << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   • " << Colors::WHITE << "REST API Server" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   • " << Colors::WHITE << "Article Editor with Rich Text Formatting" << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   • " << Colors::WHITE << "Multi-language Support" << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   • " << Colors::WHITE << "Cross-platform" << Colors::RESET << std::endl;
         
@@ -433,10 +441,110 @@ private:
         std::cout << std::endl;
     }
 
+    // Редактор новостей
+    void showNewsEditorMenu() {
+        while (true) {
+            clearScreen();
+            drawHeader(tr("news_editor_title"));
+            
+            std::cout << Colors::MAGENTA << "📋 " << tr("main_menu") << ":" << Colors::RESET << std::endl;
+            std::cout << std::endl;
+            
+            std::cout << Colors::CYAN << "1. 📰 " << tr("news_list") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "2. ✏️  " << tr("news_create") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "3. 🔄 " << tr("news_edit") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "4. 🗑️  " << tr("news_delete") << Colors::RESET << std::endl;
+            std::cout << Colors::RED << "Q. ↩️  " << tr("news_back") << Colors::RESET << std::endl;
+            
+            std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
+            std::string choice;
+            std::getline(std::cin, choice);
+            
+            if (choice == "1") {
+                articleEditor.listArticles();
+                waitForEnter();
+            } else if (choice == "2") {
+                if (articleEditor.createNewArticle()) {
+                    articleEditor.editArticle();
+                }
+            } else if (choice == "3") {
+                articleEditor.listArticles();
+                std::vector<std::string> articles = articleEditor.getArticleFilenames();
+                
+                if (articles.empty()) {
+                    std::cout << Colors::YELLOW << tr("no_articles") << Colors::RESET << std::endl;
+                    waitForEnter();
+                    continue;
+                }
+                
+                std::cout << Colors::YELLOW << "Введите номер статьи для редактирования: " << Colors::RESET;
+                std::string input;
+                std::getline(std::cin, input);
+                
+                try {
+                    int num = std::stoi(input);
+                    if (num >= 1 && num <= static_cast<int>(articles.size())) {
+                        std::string filename = articles[num-1];
+                        articleEditor.editArticle(filename);
+                    } else {
+                        showError(tr("invalid_article_number"));
+                    }
+                } catch (...) {
+                    showError(tr("invalid_article_number"));
+                }
+            } else if (choice == "4") {
+                articleEditor.listArticles();
+                
+                std::vector<std::string> articles = articleEditor.getArticleFilenames();
+                
+                if (articles.empty()) {
+                    std::cout << Colors::YELLOW << tr("no_articles") << Colors::RESET << std::endl;
+                    waitForEnter();
+                    continue;
+                }
+                
+                std::cout << Colors::YELLOW << "Введите номер статьи для удаления: " << Colors::RESET;
+                std::string input;
+                std::getline(std::cin, input);
+                
+                try {
+                    int num = std::stoi(input);
+                    if (num >= 1 && num <= static_cast<int>(articles.size())) {
+                        std::string filename = "news/" + articles[num-1];
+                        if (confirmAction("Вы уверены, что хотите удалить статью?")) {
+                            if (std::filesystem::remove(filename)) {
+                                showSuccess(tr("article_deleted"));
+                            } else {
+                                showError("Ошибка удаления статьи");
+                            }
+                        }
+                    } else {
+                        showError(tr("invalid_article_number"));
+                    }
+                } catch (...) {
+                    showError(tr("invalid_article_number"));
+                }
+                waitForEnter();
+            } else if (choice == "Q" || choice == "q") {
+                break;
+            } else {
+                showError(tr("invalid_choice"));
+                waitForEnter();
+            }
+        }
+    }
+
     // Вспомогательные методы
     void waitForEnter() {
         std::cout << std::endl << Colors::YELLOW << "↵ " << tr("press_enter") << Colors::RESET << std::endl;
         std::cin.get();
+    }
+
+    bool confirmAction(const std::string& message) {
+        std::cout << Colors::YELLOW << "❓ " << message << " (y/N): " << Colors::RESET;
+        std::string answer;
+        std::getline(std::cin, answer);
+        return (answer == "y" || answer == "Y" || answer == "да");
     }
 };
 

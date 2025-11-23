@@ -5,3 +5,6 @@ build/*
 config.json
 database_config.json
 api_config.json``
+news/
+news
+news/*

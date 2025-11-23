@@ -13,6 +13,8 @@
 #include <memory>
 #include <atomic>
 
+#include "article/ArticleEditor.h"
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -42,6 +44,8 @@ private:
     SOCKET_TYPE serverSocket;
     std::thread serverThread;
     std::thread cleanupThread;
+
+    ArticleEditor articleEditor;
     
     std::string getClientInfo(SOCKET_TYPE clientSocket);
     void initializeNetwork();
@@ -66,6 +70,10 @@ public:
     ~ApiService();
     bool start();
     void stop();
+    std::string handleGetEditor() {
+    return createJsonResponse("{\"success\": true, \"message\": \"Editor endpoint\"}");
+}
+
     std::string processRequestFromRaw(const std::string& rawRequest, const std::string& clientIP = "");
     std::string handleRevokeSessionByToken(const std::string& targetToken, const std::string& sessionToken);
     
@@ -139,6 +147,12 @@ public:
     std::string handleUpdateEventCategory(const std::string& body, const std::string& eventType);
     std::string handleDeleteEventCategory(int eventCode);
     std::string handleUpdateEventCategory(const std::string& body, int categoryId);
+
+    // News methods
+    bool isSafeNewsFilename(const std::string& filename);
+    std::string handleGetNewsList();
+    std::string handleGetNews(const std::string& filename);
+
 
 };
 

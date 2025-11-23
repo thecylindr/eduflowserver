@@ -274,6 +274,13 @@ else()
     message(FATAL_ERROR "Missing required file: api/ApiServiceMain.cpp")
 endif()
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceNews.cpp")
+    list(APPEND SOURCES "api/ApiServiceNews.cpp")
+    message(STATUS "Found: api/ApiServiceNews.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceNews.cpp")
+endif()
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceProfile.cpp")
     list(APPEND SOURCES "api/ApiServiceProfile.cpp")
     message(STATUS "Found: api/ApiServiceProfile.cpp")
@@ -336,6 +343,14 @@ endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/LocaleManager.h")
     list(APPEND HEADERS "src/LocaleManager.h")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/article/ArticleEditor.h")
+    list(APPEND HEADERS "article/ArticleEditor.h")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/article/ArticleEditor.cpp")
+    list(APPEND HEADERS "article/ArticleEditor.cpp")
 endif()
 
 # Проверяем наличие json.hpp

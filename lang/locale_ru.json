@@ -70,5 +70,17 @@
     "language_selection": "Выбор языка",
     "select_language": "Выберите язык",
     "language_changed": "Язык изменен успешно",
-    "language_load_failed": "Не удалось загрузить файлы языка"
+    "language_load_failed": "Не удалось загрузить файлы языка",
+
+    "menu_news_editor": "Редактор новостей",
+    "news_editor_title": "Управление новостями",
+    "news_list": "Список статей",
+    "news_create": "Создать статью",
+    "news_edit": "Редактировать статью",
+    "news_delete": "Удалить статью",
+    "news_back": "Вернуться назад",
+    "no_articles": "Статьи не найдены",
+    "enter_article_number": "Введите номер статьи",
+    "article_deleted": "Статья удалена",
+    "invalid_article_number": "Неверный номер статьи"
 }
