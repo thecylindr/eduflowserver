@@ -335,6 +335,7 @@ std::string ApiService::handleAddSpecialization(const std::string& body) {
 }
 
 std::string ApiService::handleAddStudent(const std::string& body) {
+    std::cout << "➕ Добавление студента..." << std::endl;
     
     try {
         json j = json::parse(body);
@@ -350,76 +351,122 @@ std::string ApiService::handleAddStudent(const std::string& body) {
         student.passportNumber = j["passport_number"];
         
         if (dbService.addStudent(student)) {
+            // ОБНОВЛЯЕМ СЧЕТЧИК ГРУППЫ
+            if (student.groupId > 0) {
+                dbService.updateGroupStudentCount(student.groupId, 1);
+            }
+            
             json response;
             response["success"] = true;
-            response["message"] = "Student added successfully";
+            response["message"] = "Студент успешно добавлен";
             return createJsonResponse(response.dump(), 201);
         } else {
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Failed to add student";
+            errorResponse["error"] = "Ошибка добавления студента";
             return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
+        std::cout << "💥 Ошибка добавления студента: " << e.what() << std::endl;
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Invalid request format";
+        errorResponse["error"] = "Неверный формат запроса";
         return createJsonResponse(errorResponse.dump(), 400);
     }
 }
 
 std::string ApiService::handleUpdateStudent(const std::string& body, int studentId) {
+    std::cout << "🔄 Обновление студента ID: " << studentId << std::endl;
     
     try {
         json j = json::parse(body);
-        Student student = dbService.getStudentById(studentId);
+        Student oldStudent = dbService.getStudentById(studentId);
         
-        if (student.studentCode == 0) {
+        if (oldStudent.studentCode == 0) {
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Student not found";
+            errorResponse["error"] = "Студент не найден";
             return createJsonResponse(errorResponse.dump(), 404);
         }
         
-        if (j.contains("last_name")) student.lastName = j["last_name"];
-        if (j.contains("first_name")) student.firstName = j["first_name"];
-        if (j.contains("middle_name")) student.middleName = j["middle_name"];
-        if (j.contains("phone_number")) student.phoneNumber = j["phone_number"];
-        if (j.contains("email")) student.email = j["email"];
-        if (j.contains("group_id")) student.groupId = j["group_id"];
-        if (j.contains("passport_series")) student.passportSeries = j["passport_series"];
-        if (j.contains("passport_number")) student.passportNumber = j["passport_number"];
+        Student newStudent = oldStudent;
         
-        if (dbService.updateStudent(student)) {
+        // Обновляем поля
+        if (j.contains("last_name")) newStudent.lastName = j["last_name"];
+        if (j.contains("first_name")) newStudent.firstName = j["first_name"];
+        if (j.contains("middle_name")) newStudent.middleName = j["middle_name"];
+        if (j.contains("phone_number")) newStudent.phoneNumber = j["phone_number"];
+        if (j.contains("email")) newStudent.email = j["email"];
+        if (j.contains("group_id")) newStudent.groupId = j["group_id"];
+        if (j.contains("passport_series")) newStudent.passportSeries = j["passport_series"];
+        if (j.contains("passport_number")) newStudent.passportNumber = j["passport_number"];
+        
+        // ОБРАБАТЫВАЕМ ИЗМЕНЕНИЕ ГРУППЫ
+        if (oldStudent.groupId != newStudent.groupId) {
+            std::cout << "🔄 Изменение группы студента: " 
+                      << oldStudent.groupId << " -> " << newStudent.groupId << std::endl;
+            
+            // Уменьшаем счетчик старой группы
+            if (oldStudent.groupId > 0) {
+                dbService.updateGroupStudentCount(oldStudent.groupId, -1);
+            }
+            
+            // Увеличиваем счетчик новой группы
+            if (newStudent.groupId > 0) {
+                dbService.updateGroupStudentCount(newStudent.groupId, 1);
+            }
+        }
+        
+        if (dbService.updateStudent(newStudent)) {
             json response;
             response["success"] = true;
-            response["message"] = "Student updated successfully";
+            response["message"] = "Студент успешно обновлен";
             return createJsonResponse(response.dump());
         } else {
+            // ЕСЛИ ОШИБКА - ВОССТАНАВЛИВАЕМ СЧЕТЧИКИ
+            if (oldStudent.groupId != newStudent.groupId) {
+                if (oldStudent.groupId > 0) {
+                    dbService.updateGroupStudentCount(oldStudent.groupId, 1);
+                }
+                if (newStudent.groupId > 0) {
+                    dbService.updateGroupStudentCount(newStudent.groupId, -1);
+                }
+            }
+            
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Failed to update student";
+            errorResponse["error"] = "Ошибка обновления студента";
             return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
+        std::cout << "💥 Ошибка обновления студента: " << e.what() << std::endl;
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Invalid request format";
+        errorResponse["error"] = "Неверный формат запроса";
         return createJsonResponse(errorResponse.dump(), 400);
     }
 }
 
 std::string ApiService::handleDeleteStudent(int studentId) {
+    std::cout << "🗑️ Удаление студента ID: " << studentId << std::endl;
+    
+    // Получаем данные студента перед удалением
+    Student student = dbService.getStudentById(studentId);
     
     if (dbService.deleteStudent(studentId)) {
+        // УМЕНЬШАЕМ СЧЕТЧИК ГРУППЫ
+        if (student.groupId > 0) {
+            dbService.updateGroupStudentCount(student.groupId, -1);
+        }
+        
         json response;
         response["success"] = true;
-        response["message"] = "Student deleted successfully";
+        response["message"] = "Студент успешно удален";
         return createJsonResponse(response.dump());
     } else {
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Failed to delete student";
+        errorResponse["error"] = "Ошибка удаления студента";
         return createJsonResponse(errorResponse.dump(), 500);
     }
 }

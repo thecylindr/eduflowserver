@@ -4,6 +4,30 @@
 #include <sstream>
 
 // Event management
+std::string DatabaseService::getCategoryNameById(int categoryId) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return "";
+    }
+    
+    std::string sql = "SELECT category FROM event_categories WHERE event_code = $1";
+    const char* params[1] = { std::to_string(categoryId).c_str() };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    
+    std::string categoryName = "";
+    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        categoryName = PQgetvalue(res, 0, 0);
+        std::cout << "📚 Найдена категория: ID=" << categoryId << " -> '" << categoryName << "'" << std::endl;
+    } else {
+        std::cout << "❌ Категория с ID " << categoryId << " не найдена в БД" << std::endl;
+    }
+    
+    PQclear(res);
+    return categoryName;
+}
+
 std::vector<Event> DatabaseService::getEvents() {
     std::vector<Event> events;
     configManager.loadConfig(currentConfig);

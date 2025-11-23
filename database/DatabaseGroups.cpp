@@ -4,6 +4,70 @@
 #include <sstream>
 
 // Group management
+bool DatabaseService::updateGroupStudentCount(int groupId, int change) {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    std::string sql = "UPDATE groups SET student_count = student_count + $1 WHERE group_id = $2";
+    const char* params[2] = {
+        std::to_string(change).c_str(),
+        std::to_string(groupId).c_str()
+    };
+    
+    PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    
+    if (!success) {
+        std::cerr << "❌ Ошибка обновления счетчика студентов в группе " << groupId 
+                  << " на " << change << ": " << PQerrorMessage(connection) << std::endl;
+    } else {
+        std::cout << "✅ Обновлен счетчик группы " << groupId << " на " << change << std::endl;
+    }
+    
+    PQclear(res);
+    return success;
+}
+
+bool DatabaseService::recalculateAllGroupCounts() {
+    configManager.loadConfig(currentConfig);
+    
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+    
+    // Сначала обнуляем все счетчики
+    std::string resetSql = "UPDATE groups SET student_count = 0";
+    PGresult* resetRes = PQexec(connection, resetSql.c_str());
+    bool resetSuccess = (PQresultStatus(resetRes) == PGRES_COMMAND_OK);
+    PQclear(resetRes);
+    
+    if (!resetSuccess) {
+        std::cerr << "❌ Ошибка сброса счетчиков групп: " << PQerrorMessage(connection) << std::endl;
+        return false;
+    }
+    
+    // Затем пересчитываем на основе реальных данных
+    std::string updateSql = 
+        "UPDATE groups g SET student_count = ("
+        "    SELECT COUNT(*) FROM students s WHERE s.group_id = g.group_id"
+        ")";
+    
+    PGresult* updateRes = PQexec(connection, updateSql.c_str());
+    bool updateSuccess = (PQresultStatus(updateRes) == PGRES_COMMAND_OK);
+    
+    if (!updateSuccess) {
+        std::cerr << "❌ Ошибка пересчета счетчиков групп: " << PQerrorMessage(connection) << std::endl;
+    } else {
+        std::cout << "✅ Пересчитаны счетчики студентов во всех группах" << std::endl;
+    }
+    
+    PQclear(updateRes);
+    return updateSuccess;
+}
+
 std::vector<StudentGroup> DatabaseService::getGroups() {
     std::vector<StudentGroup> groups;
     

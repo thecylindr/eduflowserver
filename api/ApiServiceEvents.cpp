@@ -257,11 +257,10 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId) 
         
         std::cout << "📅 Обновление события ID: " << eventId << std::endl;
         
-        // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Обновляем measureCode (связку с портфолио)
+        // Обновляем measureCode
         if (j.contains("measure_code")) {
             if (j["measure_code"].is_number()) {
                 int newMeasureCode = j["measure_code"].get<int>();
-                // Проверяем существование портфолио
                 if (!dbService.portfolioExists(newMeasureCode)) {
                     json errorResponse;
                     errorResponse["success"] = false;
@@ -280,21 +279,39 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId) 
         if (j.contains("location")) event.location = j["location"];
         if (j.contains("lore")) event.lore = j["lore"];
         
-        // ИСПРАВЛЕНИЕ: Обработка категории
+        // НАКОНЕЦ-ТО ПРАВИЛЬНО ОБРАБАТЫВАЕМ КАТЕГОРИЮ!
         if (j.contains("category") && !j["category"].is_null()) {
-            event.category = j["category"];
-            std::cout << "🏷️ Обновление категории: " << event.category << std::endl;
+            std::string categoryInput = j["category"];
+            std::cout << "🔍 Получена категория из запроса: '" << categoryInput << "'" << std::endl;
+            
+            // Если пришел числовой ID - преобразуем в название
+            if (!categoryInput.empty() && std::all_of(categoryInput.begin(), categoryInput.end(), ::isdigit)) {
+                int categoryId = std::stoi(categoryInput);
+                std::string categoryName = dbService.getCategoryNameById(categoryId);
+                
+                if (!categoryName.empty()) {
+                    event.category = categoryName;
+                    std::cout << "✅ Преобразовано ID " << categoryId << " в название: " << categoryName << std::endl;
+                } else {
+                    // Если не нашли в БД, оставляем как есть (на всякий случай)
+                    event.category = categoryInput;
+                    std::cout << "⚠️ Категория с ID " << categoryId << " не найдена, оставляем как есть" << std::endl;
+                }
+            } else {
+                // Если пришло уже название - используем его
+                event.category = categoryInput;
+                std::cout << "✅ Используем переданное название категории: " << categoryInput << std::endl;
+            }
         } else {
-            event.category = ""; // Очищаем категорию если не передана
+            event.category = "";
         }
         
-        std::cout << "📦 Обновленные данные события - ID: " << event.eventId 
-                  << ", measureCode: " << event.measureCode 
+        std::cout << "📦 ФИНАЛЬНЫЕ данные события - ID: " << event.eventId 
                   << ", eventType: " << event.eventType 
                   << ", category: " << event.category << std::endl;
         
         if (dbService.updateEvent(event)) {
-            std::cout << "✅ Событие успешно обновлено" << std::endl;
+            std::cout << "✅ Событие успешно обновлено!" << std::endl;
             
             json response;
             response["success"] = true;

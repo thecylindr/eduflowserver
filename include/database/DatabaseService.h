@@ -59,6 +59,11 @@ public:
     bool updateGroup(const StudentGroup& group);
     bool deleteGroup(int groupId);
     StudentGroup getGroupById(int groupId);
+
+    // Управление счетчиками студентов в группах
+    bool updateGroupStudentCount(int groupId, int change);
+    bool recalculateAllGroupCounts();
+    std::string getCategoryNameById(int categoryId);
     
     // Portfolio management
     std::vector<StudentPortfolio> getPortfolios();
