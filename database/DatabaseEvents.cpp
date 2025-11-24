@@ -153,7 +153,6 @@ bool DatabaseService::updateEvent(const Event& event) {
         return false;
     }
     
-    // 🔥 ТВОЯ ПРАВИЛЬНАЯ ЛОГИКА ОБНОВЛЕНИЯ КАТЕГОРИИ
     std::string decodeSql = "SELECT event_decode FROM event WHERE id = $1";
     const char* decodeParams[1] = { std::to_string(event.eventId).c_str() };
     PGresult* decodeRes = PQexecParams(connection, decodeSql.c_str(), 1, NULL, decodeParams, NULL, NULL, 0);
@@ -195,7 +194,6 @@ bool DatabaseService::updateEvent(const Event& event) {
                 return false;
             }
         } else {
-            // Категория пустая - УДАЛЯЕМ существующую
             std::string deleteSql = "DELETE FROM event_categories WHERE event_code = $1";
             const char* deleteParams[1] = { std::to_string(eventDecode).c_str() };
             PGresult* deleteRes = PQexecParams(connection, deleteSql.c_str(), 1, NULL, deleteParams, NULL, NULL, 0);
@@ -203,7 +201,6 @@ bool DatabaseService::updateEvent(const Event& event) {
             std::cout << "✅ Категория удалена для event_decode: " << eventDecode << std::endl;
         }
     } else {
-        // Категория не существует - ВСТАВЛЯЕМ новую (только если не пустая)
         if (!event.category.empty()) {
             std::string insertSql = "INSERT INTO event_categories (event_code, category) VALUES ($1, $2)";
             const char* insertParams[2] = {

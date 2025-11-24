@@ -279,7 +279,6 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId) 
         if (j.contains("location")) event.location = j["location"];
         if (j.contains("lore")) event.lore = j["lore"];
         
-        // 🔥 ТВОЯ ПРОСТАЯ И ПРАВИЛЬНАЯ ОБРАБОТКА КАТЕГОРИИ
         if (j.contains("category")) {
             if (!j["category"].is_null()) {
                 event.category = j["category"].get<std::string>();
