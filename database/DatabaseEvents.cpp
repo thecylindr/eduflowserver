@@ -150,49 +150,77 @@ bool DatabaseService::updateEvent(const Event& event) {
     
     if (!success) {
         std::cerr << "❌ Ошибка обновления события: " << PQerrorMessage(connection) << std::endl;
-        std::cerr << "   SQL: " << sql << std::endl;
-        std::cerr << "   measureCode: " << event.measureCode << std::endl;
-        std::cerr << "   eventId: " << event.eventId << std::endl;
         return false;
     }
     
-    // Handle category: Check if exists, update if yes, insert if no
-    if (!event.category.empty()) {
-        std::string decodeSql = "SELECT event_decode FROM event WHERE id = $1";
-        const char* decodeParams[1] = { std::to_string(event.eventId).c_str() };
-        PGresult* decodeRes = PQexecParams(connection, decodeSql.c_str(), 1, NULL, decodeParams, NULL, NULL, 0);
-        int eventDecode = 0;
-        if (PQresultStatus(decodeRes) == PGRES_TUPLES_OK && PQntuples(decodeRes) > 0) {
-            eventDecode = std::stoi(PQgetvalue(decodeRes, 0, 0));
-        }
-        PQclear(decodeRes);
-        
-        if (eventDecode == 0) return false; // Event not found
-        
-        // Check if category row exists
-        std::string checkSql = "SELECT 1 FROM event_categories WHERE event_code = $1";
-        const char* checkParams[1] = { std::to_string(eventDecode).c_str() };
-        PGresult* checkRes = PQexecParams(connection, checkSql.c_str(), 1, NULL, checkParams, NULL, NULL, 0);
-        bool exists = (PQntuples(checkRes) > 0);
-        PQclear(checkRes);
-        
-        std::string categorySql;
-        if (exists) {
-            categorySql = "UPDATE event_categories SET category = $1 WHERE event_code = $2";
+    // 🔥 ТВОЯ ПРАВИЛЬНАЯ ЛОГИКА ОБНОВЛЕНИЯ КАТЕГОРИИ
+    std::string decodeSql = "SELECT event_decode FROM event WHERE id = $1";
+    const char* decodeParams[1] = { std::to_string(event.eventId).c_str() };
+    PGresult* decodeRes = PQexecParams(connection, decodeSql.c_str(), 1, NULL, decodeParams, NULL, NULL, 0);
+    int eventDecode = 0;
+    if (PQresultStatus(decodeRes) == PGRES_TUPLES_OK && PQntuples(decodeRes) > 0) {
+        eventDecode = std::stoi(PQgetvalue(decodeRes, 0, 0));
+    }
+    PQclear(decodeRes);
+    
+    if (eventDecode == 0) {
+        std::cerr << "❌ Не удалось получить event_decode для события ID: " << event.eventId << std::endl;
+        return false;
+    }
+    
+    // Проверяем существование категории для данного event_decode
+    std::string checkSql = "SELECT 1 FROM event_categories WHERE event_code = $1";
+    const char* checkParams[1] = { std::to_string(eventDecode).c_str() };
+    PGresult* checkRes = PQexecParams(connection, checkSql.c_str(), 1, NULL, checkParams, NULL, NULL, 0);
+    bool categoryExists = (PQresultStatus(checkRes) == PGRES_TUPLES_OK && PQntuples(checkRes) > 0);
+    PQclear(checkRes);
+    
+    if (categoryExists) {
+        // Категория существует - ОБНОВЛЯЕМ
+        if (!event.category.empty()) {
+            std::string updateSql = "UPDATE event_categories SET category = $1 WHERE event_code = $2";
+            const char* updateParams[2] = {
+                event.category.c_str(),
+                std::to_string(eventDecode).c_str()
+            };
+            
+            PGresult* updateRes = PQexecParams(connection, updateSql.c_str(), 2, NULL, updateParams, NULL, NULL, 0);
+            bool updateSuccess = (PQresultStatus(updateRes) == PGRES_COMMAND_OK);
+            PQclear(updateRes);
+            
+            if (updateSuccess) {
+                std::cout << "✅ Категория обновлена: '" << event.category << "' для event_decode: " << eventDecode << std::endl;
+            } else {
+                std::cerr << "⚠️ Ошибка обновления категории: " << PQerrorMessage(connection) << std::endl;
+                return false;
+            }
         } else {
-            categorySql = "INSERT INTO event_categories (event_code, category) VALUES ($2, $1)";
+            // Категория пустая - УДАЛЯЕМ существующую
+            std::string deleteSql = "DELETE FROM event_categories WHERE event_code = $1";
+            const char* deleteParams[1] = { std::to_string(eventDecode).c_str() };
+            PGresult* deleteRes = PQexecParams(connection, deleteSql.c_str(), 1, NULL, deleteParams, NULL, NULL, 0);
+            PQclear(deleteRes);
+            std::cout << "✅ Категория удалена для event_decode: " << eventDecode << std::endl;
         }
-        const char* categoryParams[2] = {
-            event.category.c_str(),
-            std::to_string(eventDecode).c_str()
-        };
-        
-        PGresult* categoryRes = PQexecParams(connection, categorySql.c_str(), 2, NULL, categoryParams, NULL, NULL, 0);
-        success = (PQresultStatus(categoryRes) == PGRES_COMMAND_OK);
-        PQclear(categoryRes);
-        
-        if (!success) {
-            std::cerr << "⚠️ Ошибка обновления/добавления категории: " << PQerrorMessage(connection) << std::endl;
+    } else {
+        // Категория не существует - ВСТАВЛЯЕМ новую (только если не пустая)
+        if (!event.category.empty()) {
+            std::string insertSql = "INSERT INTO event_categories (event_code, category) VALUES ($1, $2)";
+            const char* insertParams[2] = {
+                std::to_string(eventDecode).c_str(),
+                event.category.c_str()
+            };
+            
+            PGresult* insertRes = PQexecParams(connection, insertSql.c_str(), 2, NULL, insertParams, NULL, NULL, 0);
+            bool insertSuccess = (PQresultStatus(insertRes) == PGRES_COMMAND_OK);
+            PQclear(insertRes);
+            
+            if (insertSuccess) {
+                std::cout << "✅ Категория добавлена: '" << event.category << "' для event_decode: " << eventDecode << std::endl;
+            } else {
+                std::cerr << "⚠️ Ошибка добавления категории: " << PQerrorMessage(connection) << std::endl;
+                return false;
+            }
         }
     }
     

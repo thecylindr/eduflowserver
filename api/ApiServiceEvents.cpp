@@ -279,36 +279,23 @@ std::string ApiService::handleUpdateEvent(const std::string& body, int eventId) 
         if (j.contains("location")) event.location = j["location"];
         if (j.contains("lore")) event.lore = j["lore"];
         
-        // НАКОНЕЦ-ТО ПРАВИЛЬНО ОБРАБАТЫВАЕМ КАТЕГОРИЮ!
-        if (j.contains("category") && !j["category"].is_null()) {
-            std::string categoryInput = j["category"];
-            std::cout << "🔍 Получена категория из запроса: '" << categoryInput << "'" << std::endl;
-            
-            // Если пришел числовой ID - преобразуем в название
-            if (!categoryInput.empty() && std::all_of(categoryInput.begin(), categoryInput.end(), ::isdigit)) {
-                int categoryId = std::stoi(categoryInput);
-                std::string categoryName = dbService.getCategoryNameById(categoryId);
-                
-                if (!categoryName.empty()) {
-                    event.category = categoryName;
-                    std::cout << "✅ Преобразовано ID " << categoryId << " в название: " << categoryName << std::endl;
-                } else {
-                    // Если не нашли в БД, оставляем как есть (на всякий случай)
-                    event.category = categoryInput;
-                    std::cout << "⚠️ Категория с ID " << categoryId << " не найдена, оставляем как есть" << std::endl;
-                }
+        // 🔥 ТВОЯ ПРОСТАЯ И ПРАВИЛЬНАЯ ОБРАБОТКА КАТЕГОРИИ
+        if (j.contains("category")) {
+            if (!j["category"].is_null()) {
+                event.category = j["category"].get<std::string>();
+                std::cout << "✅ Категория получена из запроса: '" << event.category << "'" << std::endl;
             } else {
-                // Если пришло уже название - используем его
-                event.category = categoryInput;
-                std::cout << "✅ Используем переданное название категории: " << categoryInput << std::endl;
+                event.category = "";
+                std::cout << "⚠️ Категория null, устанавливаем пустую строку" << std::endl;
             }
         } else {
-            event.category = "";
+            // Если категория не передана, оставляем существующую
+            std::cout << "ℹ️ Категория не передана, оставляем существующую: '" << event.category << "'" << std::endl;
         }
         
         std::cout << "📦 ФИНАЛЬНЫЕ данные события - ID: " << event.eventId 
                   << ", eventType: " << event.eventType 
-                  << ", category: " << event.category << std::endl;
+                  << ", category: '" << event.category << "'" << std::endl;
         
         if (dbService.updateEvent(event)) {
             std::cout << "✅ Событие успешно обновлено!" << std::endl;
