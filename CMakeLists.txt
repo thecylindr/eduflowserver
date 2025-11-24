@@ -205,13 +205,11 @@ else()
     message(FATAL_ERROR "Missing required file: src/main.cpp")
 endif()
 
-# Database files - заменяем DatabaseCrud.cpp на разделенные файлы
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseSetup.cpp")
     list(APPEND SOURCES "database/DatabaseSetup.cpp")
     message(STATUS "Found: database/DatabaseSetup.cpp")
 endif()
 
-# Заменяем DatabaseCrud.cpp на разделенные файлы
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseUsers.cpp")
     list(APPEND SOURCES "database/DatabaseUsers.cpp")
     message(STATUS "Found: database/DatabaseUsers.cpp")
@@ -250,11 +248,6 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseStats.cpp")
     list(APPEND SOURCES "database/DatabaseStats.cpp")
     message(STATUS "Found: database/DatabaseStats.cpp")
-endif()
-
-# Старый DatabaseCrud.cpp - проверяем, но не включаем
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseCrud.cpp")
-    message(WARNING "Found old database/DatabaseCrud.cpp - this file should be replaced with the new modular files")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseSessions.cpp")
@@ -309,11 +302,25 @@ else()
     message(FATAL_ERROR "Missing required file: api/ApiServiceSessions.cpp")
 endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceCrud.cpp")
-    list(APPEND SOURCES "api/ApiServiceCrud.cpp")
-    message(STATUS "Found: api/ApiServiceCrud.cpp")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceStudent.cpp")
+    list(APPEND SOURCES "api/ApiServiceStudent.cpp")
+    message(STATUS "Found: api/ApiServiceStudent.cpp")
 else()
-    message(FATAL_ERROR "Missing required file: api/ApiServiceCrud.cpp")
+    message(FATAL_ERROR "Missing required file: api/ApiServiceStudent.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceTeacher.cpp")
+    list(APPEND SOURCES "api/ApiServiceTeacher.cpp")
+    message(STATUS "Found: api/ApiServiceTeacher.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceTeacher.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceGroup.cpp")
+    list(APPEND SOURCES "api/ApiServiceGroup.cpp")
+    message(STATUS "Found: api/ApiServiceGroup.cpp")
+else()
+    message(FATAL_ERROR "Missing required file: api/ApiServiceGroup.cpp")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiServiceAuth.cpp")

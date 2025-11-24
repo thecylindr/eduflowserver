@@ -66,7 +66,7 @@ bool DatabaseService::setupDatabase() {
         "experience INTEGER NOT NULL,"
         "specialization SERIAL UNIQUE,"
         "email VARCHAR(100),"
-        "phone_number VARCHAR(20))",
+        "phone_number VARCHAR(11))",
 
         "CREATE TABLE IF NOT EXISTS specialization_list ("
         "id SERIAL PRIMARY KEY,"
@@ -84,7 +84,7 @@ bool DatabaseService::setupDatabase() {
         "last_name VARCHAR(100) NOT NULL,"
         "first_name VARCHAR(100) NOT NULL,"
         "middle_name VARCHAR(100),"
-        "phone_number VARCHAR(20),"
+        "phone_number VARCHAR(11),"
         "email VARCHAR(100),"
         "group_id INTEGER REFERENCES student_groups(group_id),"
         "passport_series VARCHAR(10) NOT NULL,"
@@ -102,8 +102,8 @@ bool DatabaseService::setupDatabase() {
         "event_id INTEGER REFERENCES student_portfolio(measure_code),"
         "event_decode SERIAL UNIQUE,"
         "event_type VARCHAR(48) NOT NULL,"
-        "start_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
-        "end_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,"
+        "start_date DATE NOT NULL,"
+        "end_date DATE NOT NULL,"
         "location VARCHAR(24),"
         "lore TEXT)",
         
@@ -115,7 +115,7 @@ bool DatabaseService::setupDatabase() {
         "user_id SERIAL PRIMARY KEY,"
         "email VARCHAR(100) UNIQUE NOT NULL,"
         "login VARCHAR(24) NOT NULL,"
-        "phone_number VARCHAR(20),"
+        "phone_number VARCHAR(11),"
         "password_hash TEXT NOT NULL,"
         "last_name VARCHAR(100) NOT NULL,"
         "first_name VARCHAR(100) NOT NULL,"

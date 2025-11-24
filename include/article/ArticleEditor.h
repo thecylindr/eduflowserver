@@ -30,7 +30,7 @@ private:
     Article currentArticle;
     std::vector<std::string> editBuffer;
     bool hasUnsavedChanges;
-    std::string currentFilename; // ДОБАВЛЕНО: для отслеживания текущего файла
+    std::string currentFilename; // для отслеживания текущего файла
 
     std::string getCurrentDate();
     void parseMarkdown(const std::string& markdownText);

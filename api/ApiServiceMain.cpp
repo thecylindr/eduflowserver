@@ -266,7 +266,6 @@ void ApiService::stop() {
 }
 
 void ApiService::runServer() {
-    std::cout << "🚀 Серверный поток запущен" << std::endl;
     
     while (running) {
         sockaddr_in clientAddr;
@@ -341,7 +340,6 @@ void ApiService::runServer() {
         }
     }
     
-    std::cout << "🔴 Серверный поток завершает работу" << std::endl;
 }
 
 
@@ -377,14 +375,14 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
     std::cout << "🔗 Новое подключение от IP: " << clientIP << std::endl;
     
     std::string rawRequest;
-    char buffer[4096];
+    char buffer[8192];
     int bytesReceived;
     auto startTime = std::chrono::steady_clock::now();
 
     // Увеличиваем таймаут и улучшаем чтение
     while (true) {
         memset(buffer, 0, sizeof(buffer));  // Очищаем буфер
-        bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);  // Оставляем место для нуль-терминатора
+        bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
         
         if (bytesReceived > 0) {
             rawRequest.append(buffer, bytesReceived);
@@ -425,11 +423,11 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
 #endif
                 auto now = std::chrono::steady_clock::now();
-                if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 30) {  // Увеличили таймаут
+                if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 30) {
                     std::cout << "⏰ Таймаут чтения от клиента: " << clientIP << std::endl;
                     break;
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));  // Увеличили задержку
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 continue;
             }
             std::cout << "❌ Ошибка чтения от клиента " << clientIP << ": ";
@@ -477,8 +475,6 @@ void ApiService::handleClient(SOCKET_TYPE clientSocket) {
 }
 
 void ApiService::runCleanup() {
-    std::cout << "🧹 Поток очистки запущен" << std::endl;
-    
     while (running) {
         cleanupExpiredSessions();
         dbService.deleteExpiredSessions();

@@ -80,6 +80,7 @@ public:
     std::string handleGetDashboard(const std::string& sessionToken);
 
     // Authentication
+    bool isValidPhoneNumber(const std::string& phoneNumber);
     std::string handleRegister(const std::string& body, const std::string& clientInfo = "");
     std::string handleLogin(const std::string& body, const std::string& clientInfo = "");
     std::string handleForgotPassword(const std::string& body);

@@ -1,0 +1,353 @@
+#include "api/ApiService.h"
+#include "json.hpp"
+#include <iostream>
+
+using json = nlohmann::json;
+
+std::string ApiService::handleAddTeacher(const std::string& body) {
+    std::cout << "🔄 Обработка добавления преподавателя..." << std::endl;
+    std::cout << "📦 Тело запроса: " << body << std::endl;
+    
+    try {
+        json j = json::parse(body);
+        Teacher teacher;
+        
+        // Обязательные поля
+        if (!j.contains("last_name") || !j.contains("first_name")) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Поля 'last_name' и 'first_name' обязательны";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        teacher.lastName = j["last_name"];
+        teacher.firstName = j["first_name"];
+        teacher.middleName = j.value("middle_name", "");
+        teacher.experience = j.value("experience", 0);
+        teacher.email = j.value("email", "");
+        teacher.phoneNumber = j.value("phone_number", "");
+        
+        // Проверка номера телефона
+        if (!teacher.phoneNumber.empty() && !isValidPhoneNumber(teacher.phoneNumber)) {
+            std::cout << "❌ Invalid phone number format for teacher: " << teacher.phoneNumber << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Номер телефона должен содержать ровно 11 цифр";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        std::cout << "👨‍🏫 Добавление преподавателя: " << teacher.firstName << " " << teacher.lastName << std::endl;
+        
+        // Обрабатываем специализации
+        if (j.contains("specialization") && !j["specialization"].is_null()) {
+            std::string specializationStr = j["specialization"];
+            std::cout << "🔗 Обработка специализаций: " << specializationStr << std::endl;
+            
+            // Разделяем строку специализаций по запятой
+            size_t start = 0, end = 0;
+            while ((end = specializationStr.find(',', start)) != std::string::npos) {
+                std::string name = specializationStr.substr(start, end - start);
+                // Удаляем пробелы
+                name.erase(0, name.find_first_not_of(" \t\n\r\f\v"));
+                name.erase(name.find_last_not_of(" \t\n\r\f\v") + 1);
+                if (!name.empty()) {
+                    Specialization spec;
+                    spec.name = name;
+                    teacher.specializations.push_back(spec);
+                }
+                start = end + 1;
+            }
+            // Добавляем последнюю специализацию
+            std::string lastName = specializationStr.substr(start);
+            lastName.erase(0, lastName.find_first_not_of(" \t\n\r\f\v"));
+            lastName.erase(lastName.find_last_not_of(" \t\n\r\f\v") + 1);
+            if (!lastName.empty()) {
+                Specialization spec;
+                spec.name = lastName;
+                teacher.specializations.push_back(spec);
+            }
+        }
+        
+        // Добавляем преподавателя в БД
+        if (dbService.addTeacher(teacher)) {
+            std::cout << "✅ Преподаватель успешно добавлен" << std::endl;
+            
+            // Формируем успешный ответ
+            json response;
+            response["success"] = true;
+            response["message"] = "Преподаватель успешно добавлен!";
+            
+            return createJsonResponse(response.dump(), 201);
+        } else {
+            std::cout << "❌ Ошибка при добавлении преподавателя в БД" << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Ошибка при добавлении преподавателя";
+            return createJsonResponse(errorResponse.dump(), 500);
+        }
+    } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION в handleAddTeacher: " << e.what() << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Неверный формат запроса: " + std::string(e.what());
+        return createJsonResponse(errorResponse.dump(), 400);
+    }
+}
+
+std::string ApiService::handleUpdateTeacher(const std::string& body, int teacherId) {
+    std::cout << "🔄 Обработка обновления преподавателя ID: " << teacherId << std::endl;
+    std::cout << "📦 Тело запроса: " << body << std::endl;
+    
+    try {
+        json j = json::parse(body);
+        
+        // Получаем текущие данные преподавателя
+        Teacher teacher = dbService.getTeacherById(teacherId);
+        
+        if (teacher.teacherId == 0) {
+            std::cout << "❌ Преподаватель не найден: " << teacherId << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Преподаватель не найден";
+            return createJsonResponse(errorResponse.dump(), 404);
+        }
+        
+        std::cout << "👨‍🏫 Обновление преподавателя ID: " << teacherId << std::endl;
+        
+        // Обновляем поля
+        if (j.contains("last_name")) teacher.lastName = j["last_name"];
+        if (j.contains("first_name")) teacher.firstName = j["first_name"];
+        if (j.contains("middle_name")) teacher.middleName = j["middle_name"];
+        if (j.contains("experience")) teacher.experience = j["experience"];
+        if (j.contains("email")) teacher.email = j["email"];
+        if (j.contains("phone_number")) teacher.phoneNumber = j["phone_number"];
+        
+        // Проверка номера телефона
+        if (!teacher.phoneNumber.empty() && !isValidPhoneNumber(teacher.phoneNumber)) {
+            std::cout << "❌ Invalid phone number format for teacher: " << teacher.phoneNumber << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Номер телефона должен содержать ровно 11 цифр";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        if (dbService.updateTeacher(teacher)) {
+            std::cout << "✅ Основные данные преподавателя обновлены" << std::endl;
+            
+            if (j.contains("specialization")) {
+                std::string specializationStr = j["specialization"];
+                std::cout << "🔗 Обновление специализаций: " << specializationStr << std::endl;
+                
+                // Получаем текущий код специализации преподавателя
+                int currentSpecCode = teacher.specializationCode;
+                std::cout << "🔑 Текущий код специализации: " << currentSpecCode << std::endl;
+                
+                if (currentSpecCode > 0) {
+                    // УДАЛЯЕМ ВСЕ СТАРЫЕ СПЕЦИАЛИЗАЦИИ ЭТОГО ПРЕПОДАВАТЕЛЯ
+                    if (dbService.removeAllTeacherSpecializations(teacherId)) {
+                        std::cout << "✅ Старые специализации удалены" << std::endl;
+                    } else {
+                        std::cout << "⚠️ Не удалось удалить старые специализации" << std::endl;
+                    }
+                    
+                    // ДОБАВЛЯЕМ НОВЫЕ СПЕЦИАЛИЗАЦИИ (только если есть новые)
+                    if (!specializationStr.empty()) {
+                        // Разделяем строку специализаций по запятой
+                        size_t start = 0, end = 0;
+                        std::vector<std::string> specNames;
+                        
+                        while ((end = specializationStr.find(',', start)) != std::string::npos) {
+                            std::string name = specializationStr.substr(start, end - start);
+                            // Удаляем пробелы
+                            name.erase(0, name.find_first_not_of(" \t\n\r\f\v"));
+                            name.erase(name.find_last_not_of(" \t\n\r\f\v") + 1);
+                            if (!name.empty()) {
+                                specNames.push_back(name);
+                            }
+                            start = end + 1;
+                        }
+                        // Добавляем последнюю специализацию
+                        std::string lastName = specializationStr.substr(start);
+                        lastName.erase(0, lastName.find_first_not_of(" \t\n\r\f\v"));
+                        lastName.erase(lastName.find_last_not_of(" \t\n\r\f\v") + 1);
+                        if (!lastName.empty()) {
+                            specNames.push_back(lastName);
+                        }
+                        
+                        for (const auto& name : specNames) {
+                            Specialization spec;
+                            spec.specializationCode = currentSpecCode;
+                            spec.name = name;
+                            
+                            if (dbService.addSpecialization(spec)) {
+                                std::cout << "✅ Добавлена специализация: " << name << " (код: " << currentSpecCode << ")" << std::endl;
+                            } else {
+                                std::cout << "❌ Не удалось добавить специализацию: " << name << std::endl;
+                            }
+                        }
+                    }
+                } else {
+                    std::cout << "⚠️ У преподавателя нет кода специализации, пропускаем обновление специализаций" << std::endl;
+                }
+            }
+            
+            json response;
+            response["success"] = true;
+            response["message"] = "Преподаватель успешно обновлен";
+            
+            return createJsonResponse(response.dump());
+        } else {
+            std::cout << "❌ Ошибка при обновлении преподавателя" << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Ошибка при обновлении преподавателя";
+            return createJsonResponse(errorResponse.dump(), 500);
+        }
+    } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION в handleUpdateTeacher: " << e.what() << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Неверный формат запроса: " + std::string(e.what());
+        return createJsonResponse(errorResponse.dump(), 400);
+    }
+}
+
+std::string ApiService::handleDeleteTeacher(int teacherId) {
+    std::cout << "👨‍🏫 Deleting teacher ID: " << teacherId << std::endl;
+    
+    if (dbService.deleteTeacher(teacherId)) {
+        std::cout << "✅ Teacher deleted successfully" << std::endl;
+        json response;
+        response["success"] = true;
+        response["message"] = "Teacher deleted successfully";
+        return createJsonResponse(response.dump());
+    } else {
+        std::cout << "❌ Failed to delete teacher" << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Failed to delete teacher";
+        return createJsonResponse(errorResponse.dump(), 500);
+    }
+}
+
+std::string ApiService::handleAddTeacherSpecialization(const std::string& body) {
+    std::cout << "🔄 Обработка добавления специализации преподавателю..." << std::endl;
+    std::cout << "📦 Тело запроса: " << body << std::endl;
+
+    try {
+        json j = json::parse(body);
+        
+        if (!j.contains("teacher_id") || !j.contains("specialization_code")) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Поля 'teacher_id' и 'specialization_code' обязательны";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        int teacherId = j["teacher_id"];
+        int specializationCode = j["specialization_code"];
+        
+        std::cout << "🔗 Добавление специализации " << specializationCode << " преподавателю " << teacherId << std::endl;
+        
+        if (dbService.addTeacherSpecialization(teacherId, specializationCode)) {
+            std::cout << "✅ Специализация успешно добавлена преподавателю" << std::endl;
+            
+            json response;
+            response["success"] = true;
+            response["message"] = "Специализация успешно добавлена преподавателю";
+            
+            return createJsonResponse(response.dump(), 201);
+        } else {
+            std::cout << "❌ Ошибка при добавлении специализации преподавателю" << std::endl;
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Ошибка при добавлении специализации преподавателю";
+            return createJsonResponse(errorResponse.dump(), 500);
+        }
+    } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION в handleAddTeacherSpecialization: " << e.what() << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Неверный формат запроса: " + std::string(e.what());
+        return createJsonResponse(errorResponse.dump(), 400);
+    }
+}
+
+std::string ApiService::handleRemoveTeacherSpecialization(int teacherId, int specializationCode) {
+    
+    std::cout << "🔗 Removing specialization " << specializationCode << " from teacher " << teacherId << std::endl;
+    
+    if (dbService.removeTeacherSpecialization(teacherId, specializationCode)) {
+        json response;
+        response["success"] = true;
+        response["message"] = "Specialization removed from teacher successfully";
+        return createJsonResponse(response.dump());
+    } else {
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Failed to remove specialization from teacher";
+        return createJsonResponse(errorResponse.dump(), 500);
+    }
+}
+
+std::string ApiService::handleDeleteSpecialization(int specializationCode) {
+    
+    std::cout << "🗑️ Deleting specialization with code: " << specializationCode << std::endl;
+    
+    if (dbService.deleteSpecialization(specializationCode)) {
+        std::cout << "✅ Specialization deleted successfully" << std::endl;
+        json response;
+        response["success"] = true;
+        response["message"] = "Specialization deleted successfully";
+        return createJsonResponse(response.dump());
+    } else {
+        std::cout << "❌ Failed to delete specialization" << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Failed to delete specialization";
+        return createJsonResponse(errorResponse.dump(), 500);
+    }
+}
+
+std::string ApiService::handleAddSpecialization(const std::string& body) {
+
+    try {
+        json j = json::parse(body);
+        
+        if (!j.contains("name") || j["name"].is_null()) {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Field 'name' is required";
+            return createJsonResponse(errorResponse.dump(), 400);
+        }
+        
+        std::string name = j["name"];
+        int code = j.value("code", 0);
+        
+        Specialization spec;
+        spec.name = name;
+        spec.specializationCode = code;
+        
+        std::cout << "📚 Adding specialization: " << name << " (code: " << code << ")" << std::endl;
+        
+        if (dbService.addSpecialization(spec)) {
+            json response;
+            response["success"] = true;
+            response["message"] = "Specialization added successfully";
+            response["code"] = code;
+            return createJsonResponse(response.dump(), 201);
+        } else {
+            json errorResponse;
+            errorResponse["success"] = false;
+            errorResponse["error"] = "Failed to add specialization";
+            return createJsonResponse(errorResponse.dump(), 500);
+        }
+        
+    } catch (const std::exception& e) {
+        std::cout << "💥 EXCEPTION in handleAddSpecialization: " << e.what() << std::endl;
+        json errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = "Invalid request format";
+        return createJsonResponse(errorResponse.dump(), 400);
+    }
+}

@@ -72,8 +72,18 @@ std::string ApiService::handleUpdateProfile(const std::string& body, const std::
         
         if (j.contains("phoneNumber") && !j["phoneNumber"].is_null()) {
             std::string newPhone = j["phoneNumber"];
-            // Проверяем, не занят ли телефон другим пользователем
+            
+            // Проверка формата номера телефона
             if (!newPhone.empty()) {
+                if (!ApiService::isValidPhoneNumber(newPhone)) {
+                    std::cout << "❌ Invalid phone number format: " << newPhone << std::endl;
+                    json errorResponse;
+                    errorResponse["success"] = false;
+                    errorResponse["error"] = "Номер телефона должен содержать ровно 11 цифр";
+                    return createJsonResponse(errorResponse.dump(), 400);
+                }
+                
+                // Проверяем, не занят ли телефон другим пользователем
                 User existingUser = dbService.getUserByPhoneNumber(newPhone);
                 if (existingUser.userId != 0 && existingUser.userId != user.userId) {
                     json errorResponse;
