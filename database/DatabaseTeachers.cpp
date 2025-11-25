@@ -197,7 +197,7 @@ bool DatabaseService::removeAllTeacherSpecializations(int teacherId) {
         return false;
     }
     
-    // ИСПРАВЛЕНИЕ: Получаем код специализации преподавателя правильным способом
+    // Получаем код специализации преподавателя правильным способом
     Teacher teacher = getTeacherById(teacherId);
     if (teacher.teacherId == 0) {
         return false;
@@ -206,7 +206,7 @@ bool DatabaseService::removeAllTeacherSpecializations(int teacherId) {
     std::cout << "🗑️ Удаление всех специализаций преподавателя ID: " << teacherId 
               << " (код специализации: " << teacher.specializationCode << ")" << std::endl;
     
-    // ИСПРАВЛЕНИЕ: Используем specializationCode вместо specialization
+    // Используем specializationCode вместо specialization
     std::string sql = "DELETE FROM specialization_list WHERE specialization = $1";
     const char* params[1] = { std::to_string(teacher.specializationCode).c_str() };
     

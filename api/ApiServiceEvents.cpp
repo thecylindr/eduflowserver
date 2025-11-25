@@ -148,12 +148,12 @@ std::string ApiService::handleAddEvent(const std::string& body) {
         json j = json::parse(body);
         Event event;
         
-        // ИСПРАВЛЕНИЕ: Получаем measure_code вместо event_id
+        // Получаем measure_code вместо event_id
         if (j.contains("measureCode")) {
             event.measureCode = j["measureCode"];
             std::cout << "✅ measureCode из запроса: " << event.measureCode << std::endl;
         } else {
-            // ИСПРАВЛЕНИЕ: Пробуем альтернативные поля
+            // Пробуем альтернативные поля
             event.measureCode = j.value("event_id", j.value("event_code", 0));
             std::cout << "⚠️ measureCode не найден, используем альтернативы: " << event.measureCode << std::endl;
         }
@@ -172,7 +172,7 @@ std::string ApiService::handleAddEvent(const std::string& body) {
         event.location = j.value("location", "");
         event.lore = j.value("lore", "");
         
-        // ИСПРАВЛЕНИЕ: Проверяем существование портфолио
+        // Проверяем существование портфолио
         if (event.measureCode <= 0) {
             json errorResponse;
             errorResponse["success"] = false;
@@ -188,7 +188,7 @@ std::string ApiService::handleAddEvent(const std::string& body) {
             return createJsonResponse(errorResponse.dump(), 404);
         }
         
-        // УПРОЩЕНИЕ: Просто сохраняем категорию в объект Event
+        // Просто сохраняем категорию в объект Event
         if (j.contains("category") && !j["category"].is_null()) {
             event.category = j["category"];
             std::cout << "🏷️ Категория события: " << event.category << std::endl;

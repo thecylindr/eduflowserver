@@ -74,7 +74,7 @@ bool DatabaseService::addEvent(const Event& event) {
         return false;
     }
     
-    // ИСПРАВЛЕНИЕ: Правильные параметры для вставки
+    // Правильные параметры для вставки
     std::string sql = "INSERT INTO event (event_id, event_type, start_date, end_date, location, lore) "
                       "VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, event_decode";
     const char* params[6] = {
