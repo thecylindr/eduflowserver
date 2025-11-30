@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 
+// Database Setup
 DatabaseService::DatabaseService() : connection(nullptr) {
     configManager.loadConfig(currentConfig);
 }

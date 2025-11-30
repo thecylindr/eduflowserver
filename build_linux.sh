@@ -218,7 +218,7 @@ check_project_files() {
         missing_files+=("CMakeLists.txt")
     fi
     
-    if [ ! -f "src/main.cpp" ]; then
+    if [ ! -f "main/main.cpp" ]; then
         missing_files+=("src/main.cpp")
     fi
     

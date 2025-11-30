@@ -5,7 +5,6 @@
 using json = nlohmann::json;
 
 std::string ApiService::handleAddGroup(const std::string& body) {
-    
     try {
         json j = json::parse(body);
         StudentGroup group;
@@ -17,24 +16,23 @@ std::string ApiService::handleAddGroup(const std::string& body) {
         if (dbService.addGroup(group)) {
             json response;
             response["success"] = true;
-            response["message"] = "Group added successfully";
+            response["message"] = "Группа успешно добавлена!";
             return createJsonResponse(response.dump(), 201);
         } else {
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Failed to add group";
+            errorResponse["error"] = "Ошибка добавления группы.";
             return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Invalid request format";
+        errorResponse["error"] = "Неверный запрос на сервер.";
         return createJsonResponse(errorResponse.dump(), 400);
     }
 }
 
 std::string ApiService::handleUpdateGroup(const std::string& body, int groupId) {
-    
     try {
         json j = json::parse(body);
         StudentGroup group = dbService.getGroupById(groupId);
@@ -42,7 +40,7 @@ std::string ApiService::handleUpdateGroup(const std::string& body, int groupId) 
         if (group.groupId == 0) {
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Group not found";
+            errorResponse["error"] = "Группа не найдена.";
             return createJsonResponse(errorResponse.dump(), 404);
         }
         
@@ -53,40 +51,37 @@ std::string ApiService::handleUpdateGroup(const std::string& body, int groupId) 
         if (dbService.updateGroup(group)) {
             json response;
             response["success"] = true;
-            response["message"] = "Group updated successfully";
+            response["message"] = "Группа успешно обновлена!";
             return createJsonResponse(response.dump());
         } else {
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Failed to update group";
+            errorResponse["error"] = "Ошибка обновления группы.";
             return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Invalid request format";
+        errorResponse["error"] = "Неверный запрос на сервер.";
         return createJsonResponse(errorResponse.dump(), 400);
     }
 }
 
 std::string ApiService::handleDeleteGroup(int groupId) {
-    
     if (dbService.deleteGroup(groupId)) {
         json response;
         response["success"] = true;
-        response["message"] = "Group deleted successfully";
+        response["message"] = "Группа успешно удалена.";
         return createJsonResponse(response.dump());
     } else {
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Failed to delete group";
+        errorResponse["error"] = "Ошибка удаления группы. Возможно, в ней ещё находятся студенты.";
         return createJsonResponse(errorResponse.dump(), 500);
     }
 }
 
 std::string ApiService::getEventsJson(const std::string& sessionToken) {
-    std::cout << "📅 Получение списка событий..." << std::endl;
-    
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
     }

@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <iostream>
 #include <sstream>
+#include "logger/logger.h"
 
 // Event management
 std::string DatabaseService::getCategoryNameById(int categoryId) {
@@ -17,12 +18,6 @@ std::string DatabaseService::getCategoryNameById(int categoryId) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
     
     std::string categoryName = "";
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        categoryName = PQgetvalue(res, 0, 0);
-        std::cout << "📚 Найдена категория: ID=" << categoryId << " -> '" << categoryName << "'" << std::endl;
-    } else {
-        std::cout << "❌ Категория с ID " << categoryId << " не найдена в БД" << std::endl;
-    }
     
     PQclear(res);
     return categoryName;
@@ -78,7 +73,7 @@ bool DatabaseService::addEvent(const Event& event) {
     std::string sql = "INSERT INTO event (event_id, event_type, start_date, end_date, location, lore) "
                       "VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, event_decode";
     const char* params[6] = {
-        std::to_string(event.measureCode).c_str(),  // event_id = measure_code из портфолио
+        std::to_string(event.measureCode).c_str(),
         event.eventType.c_str(),
         event.startDate.c_str(),
         event.endDate.c_str(),
@@ -89,18 +84,13 @@ bool DatabaseService::addEvent(const Event& event) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
     
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cerr << "❌ Ошибка добавления события: " << PQerrorMessage(connection) << std::endl;
-        std::cerr << "   measureCode: " << event.measureCode << std::endl;
-        std::cerr << "   SQL: " << sql << std::endl;
+        Logger::getInstance().log("❌ Ошибка добавления события: " + std::string(PQerrorMessage(connection)), "ERROR");
         PQclear(res);
         return false;
     }
     
-    int newEventId = std::stoi(PQgetvalue(res, 0, 0));
     int newEventDecode = std::stoi(PQgetvalue(res, 0, 1));
     PQclear(res);
-    
-    std::cout << "✅ Событие добавлено, id: " << newEventId << ", decode: " << newEventDecode << std::endl;
     
     // Вставляем категорию, если указана (связываем с event_decode)
     if (!event.category.empty()) {
@@ -111,14 +101,6 @@ bool DatabaseService::addEvent(const Event& event) {
         };
         
         PGresult* categoryRes = PQexecParams(connection, categorySql.c_str(), 2, NULL, categoryParams, NULL, NULL, 0);
-        bool categorySuccess = (PQresultStatus(categoryRes) == PGRES_COMMAND_OK);
-        
-        if (!categorySuccess) {
-            std::cerr << "⚠️ Ошибка добавления категории: " << PQerrorMessage(connection) << std::endl;
-            // Продолжаем, даже если категория не вставилась (событие сохранено)
-        } else {
-            std::cout << "✅ Категория сохранена: " << event.category << " для event_decode: " << newEventDecode << std::endl;
-        }
         PQclear(categoryRes);
     }
     
@@ -149,7 +131,7 @@ bool DatabaseService::updateEvent(const Event& event) {
     PQclear(res);
     
     if (!success) {
-        std::cerr << "❌ Ошибка обновления события: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка обновления события: " + std::string(PQerrorMessage(connection)), "ERROR");
         return false;
     }
     
@@ -163,7 +145,7 @@ bool DatabaseService::updateEvent(const Event& event) {
     PQclear(decodeRes);
     
     if (eventDecode == 0) {
-        std::cerr << "❌ Не удалось получить event_decode для события ID: " << event.eventId << std::endl;
+        Logger::getInstance().log("❌ Не удалось получить event_decode для события ID: " + std::to_string(event.eventId), "ERROR");
         return false;
     }
     
@@ -184,21 +166,12 @@ bool DatabaseService::updateEvent(const Event& event) {
             };
             
             PGresult* updateRes = PQexecParams(connection, updateSql.c_str(), 2, NULL, updateParams, NULL, NULL, 0);
-            bool updateSuccess = (PQresultStatus(updateRes) == PGRES_COMMAND_OK);
             PQclear(updateRes);
-            
-            if (updateSuccess) {
-                std::cout << "✅ Категория обновлена: '" << event.category << "' для event_decode: " << eventDecode << std::endl;
-            } else {
-                std::cerr << "⚠️ Ошибка обновления категории: " << PQerrorMessage(connection) << std::endl;
-                return false;
-            }
         } else {
             std::string deleteSql = "DELETE FROM event_categories WHERE event_code = $1";
             const char* deleteParams[1] = { std::to_string(eventDecode).c_str() };
             PGresult* deleteRes = PQexecParams(connection, deleteSql.c_str(), 1, NULL, deleteParams, NULL, NULL, 0);
             PQclear(deleteRes);
-            std::cout << "✅ Категория удалена для event_decode: " << eventDecode << std::endl;
         }
     } else {
         if (!event.category.empty()) {
@@ -209,15 +182,7 @@ bool DatabaseService::updateEvent(const Event& event) {
             };
             
             PGresult* insertRes = PQexecParams(connection, insertSql.c_str(), 2, NULL, insertParams, NULL, NULL, 0);
-            bool insertSuccess = (PQresultStatus(insertRes) == PGRES_COMMAND_OK);
             PQclear(insertRes);
-            
-            if (insertSuccess) {
-                std::cout << "✅ Категория добавлена: '" << event.category << "' для event_decode: " << eventDecode << std::endl;
-            } else {
-                std::cerr << "⚠️ Ошибка добавления категории: " << PQerrorMessage(connection) << std::endl;
-                return false;
-            }
         }
     }
     
@@ -236,10 +201,6 @@ bool DatabaseService::deleteEvent(int eventId) {
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    
-    if (!success) {
-        std::cerr << "Ошибка удаления события: " << PQerrorMessage(connection) << std::endl;
-    }
     
     PQclear(res);
     return success;
@@ -297,7 +258,6 @@ std::vector<EventCategory> DatabaseService::getEventCategories() {
     PGresult* res = PQexec(connection, sql.c_str());
     
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cerr << "Ошибка выполнения запроса категорий событий: " << PQerrorMessage(connection) << std::endl;
         PQclear(res);
         return categories;
     }
@@ -311,11 +271,11 @@ std::vector<EventCategory> DatabaseService::getEventCategories() {
             try {
                 category.eventCode = std::stoi(eventCodeStr);
             } catch (const std::exception& e) {
-                std::cerr << "❌ Ошибка преобразования event_code в число: " << eventCodeStr << " - " << e.what() << std::endl;
-                continue; // Пропускаем некорректную запись
+                Logger::getInstance().log("❌ Ошибка преобразования event_code в число: " + std::string(eventCodeStr) + " - " + std::string(e.what()), "ERROR");
+                continue;
             }
         } else {
-            std::cerr << "⚠️ Обнаружен NULL в event_code, пропускаем запись" << std::endl;
+            Logger::getInstance().log("⚠️ Обнаружен NULL в event_code, пропускаем запись", "WARNING");
             continue;
         }
         
@@ -329,7 +289,6 @@ std::vector<EventCategory> DatabaseService::getEventCategories() {
     }
     
     PQclear(res);
-    std::cout << "✅ Получено категорий событий: " << categories.size() << std::endl;
     return categories;
 }
 
@@ -348,13 +307,6 @@ bool DatabaseService::addEventCategory(const EventCategory& category) {
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    
-    if (success) {
-        std::cout << "✅ Категория события добавлена: event_code=" << category.eventCode 
-                << " - " << category.category << std::endl;
-    } else {
-        std::cerr << "Ошибка добавления категории события: " << PQerrorMessage(connection) << std::endl;
-    }
     
     PQclear(res);
     return success;
@@ -401,7 +353,7 @@ bool DatabaseService::updateEventCategory(const EventCategory& category) {
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
-        std::cerr << "Ошибка обновления категории события: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка обновления категории события: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     
     PQclear(res);
@@ -422,7 +374,7 @@ bool DatabaseService::deleteEventCategory(int eventCode) {
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
-        std::cerr << "Ошибка удаления категории события: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка удаления категории события: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     
     PQclear(res);

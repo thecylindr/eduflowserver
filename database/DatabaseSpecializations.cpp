@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <iostream>
 #include <sstream>
+#include "logger/logger.h"
 
 // Specializations management
 std::vector<Specialization> DatabaseService::getSpecializations() {
@@ -183,12 +184,12 @@ std::vector<std::string> DatabaseService::getUniqueSpecializationNames() {
         return names;
     }
 
-    std::string sql = "SELECT DISTINCT name FROM specialization_list ORDER BY name ASC;";  // DISTINCT для уникальности, ORDER BY для сортировки
+    std::string sql = "SELECT DISTINCT name FROM specialization_list ORDER BY name ASC;";
 
     PGresult* res = PQexec(connection, sql.c_str());
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cerr << "Ошибка получения уникальных специализаций: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка получения уникальных специализаций: " + std::string(PQerrorMessage(connection)), "ERROR");
         PQclear(res);
         return names;
     }

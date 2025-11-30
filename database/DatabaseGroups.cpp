@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <iostream>
 #include <sstream>
+#include "logger/logger.h"
 
 // Group management
 bool DatabaseService::updateGroupStudentCount(int groupId, int change) {
@@ -11,7 +12,8 @@ bool DatabaseService::updateGroupStudentCount(int groupId, int change) {
         return false;
     }
     
-    std::string sql = "UPDATE groups SET student_count = student_count + $1 WHERE group_id = $2";
+    // ИСПРАВЛЕНО: заменили "groups" на "student_groups"
+    std::string sql = "UPDATE student_groups SET student_count = student_count + $1 WHERE group_id = $2";
     const char* params[2] = {
         std::to_string(change).c_str(),
         std::to_string(groupId).c_str()
@@ -19,13 +21,6 @@ bool DatabaseService::updateGroupStudentCount(int groupId, int change) {
     
     PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    
-    if (!success) {
-        std::cerr << "❌ Ошибка обновления счетчика студентов в группе " << groupId 
-                  << " на " << change << ": " << PQerrorMessage(connection) << std::endl;
-    } else {
-        std::cout << "✅ Обновлен счетчик группы " << groupId << " на " << change << std::endl;
-    }
     
     PQclear(res);
     return success;
@@ -38,31 +33,25 @@ bool DatabaseService::recalculateAllGroupCounts() {
         return false;
     }
     
-    // Сначала обнуляем все счетчики
-    std::string resetSql = "UPDATE groups SET student_count = 0";
+    // ИСПРАВЛЕНО: заменили "groups" на "student_groups"
+    std::string resetSql = "UPDATE student_groups SET student_count = 0";
     PGresult* resetRes = PQexec(connection, resetSql.c_str());
     bool resetSuccess = (PQresultStatus(resetRes) == PGRES_COMMAND_OK);
     PQclear(resetRes);
     
     if (!resetSuccess) {
-        std::cerr << "❌ Ошибка сброса счетчиков групп: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка сброса счетчиков групп: " + std::string(PQerrorMessage(connection)), "ERROR");
         return false;
     }
     
-    // Затем пересчитываем на основе реальных данных
+    // ИСПРАВЛЕНО: заменили "groups" на "student_groups"
     std::string updateSql = 
-        "UPDATE groups g SET student_count = ("
+        "UPDATE student_groups g SET student_count = ("
         "    SELECT COUNT(*) FROM students s WHERE s.group_id = g.group_id"
         ")";
     
     PGresult* updateRes = PQexec(connection, updateSql.c_str());
     bool updateSuccess = (PQresultStatus(updateRes) == PGRES_COMMAND_OK);
-    
-    if (!updateSuccess) {
-        std::cerr << "❌ Ошибка пересчета счетчиков групп: " << PQerrorMessage(connection) << std::endl;
-    } else {
-        std::cout << "✅ Пересчитаны счетчики студентов во всех группах" << std::endl;
-    }
     
     PQclear(updateRes);
     return updateSuccess;

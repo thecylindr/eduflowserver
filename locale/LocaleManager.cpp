@@ -1,5 +1,4 @@
-// LocaleManager.cpp
-#include "LocaleManager.h"
+#include "locale/LocaleManager.h"
 #include <limits>
 
 bool LocaleManager::checkLocales() {
@@ -58,7 +57,7 @@ void LocaleManager::showLanguageSelection(std::map<std::string, std::string>& cu
         std::cout << "║                                                          ║" << std::endl;
         std::cout << "║  Please choose language (1-2):                           ║" << std::endl;
         std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
-        std::cout << "👉 Your choice: ";
+        std::cout << "Your choice: ";
         
         std::cin >> choice;
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');

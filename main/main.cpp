@@ -1,4 +1,3 @@
-// main.cpp - версия с цветным оформлением и интегрированным редактором новостей
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -9,7 +8,8 @@
 #include "api/ApiService.h"
 #include "configs/ConfigManager.h"
 #include "article/ArticleEditor.h"
-#include "LocaleManager.h"
+#include "locale/LocaleManager.h"
+#include "logger/logger.h"
 
 #include <filesystem>
 #include <vector>
@@ -37,6 +37,14 @@ namespace Colors {
     const std::string WHITE = "\033[37m";
     const std::string BOLD = "\033[1m";
 }
+
+// Типы сообщений для showMessage
+enum class MessageType {
+    INFO,
+    SUCCESS,
+    ERROR,
+    WARNING
+};
 
 class Application {
 private:
@@ -67,28 +75,33 @@ public:
     // Красивый заголовок с цветом
     void drawHeader(const std::string& title) {
         std::cout << Colors::MAGENTA << "┌────────────────────────────────────────────────────────────┐" << Colors::RESET << std::endl;
-        std::cout << Colors::MAGENTA << "                🎓 " << title << " 🎓                  " << Colors::RESET << std::endl;
+        std::cout << Colors::MAGENTA << "                  " << title << "                    " << Colors::RESET << std::endl;
         std::cout << Colors::MAGENTA << "└────────────────────────────────────────────────────────────┘" << Colors::RESET << std::endl;
     }
 
-    // Информационное сообщение
-    void showInfo(const std::string& message) {
-        std::cout << Colors::CYAN << "💡 " << message << Colors::RESET << std::endl;
-    }
-
-    // Сообщение об успехе
-    void showSuccess(const std::string& message) {
-        std::cout << Colors::GREEN << "✅ " << message << Colors::RESET << std::endl;
-    }
-
-    // Сообщение об ошибке
-    void showError(const std::string& message) {
-        std::cout << Colors::RED << "❌ " << message << Colors::RESET << std::endl;
-    }
-
-    // Предупреждение
-    void showWarning(const std::string& message) {
-        std::cout << Colors::YELLOW << "⚠️  " << message << Colors::RESET << std::endl;
+    // Универсальный метод для показа сообщений
+    void showMessage(MessageType type, const std::string& message) {
+        std::string color;
+        
+        switch(type) {
+            case MessageType::INFO:
+                color = Colors::CYAN;
+                break;
+            case MessageType::SUCCESS:
+                color = Colors::GREEN;
+                break;
+            case MessageType::ERROR:
+                color = Colors::RED;
+                break;
+            case MessageType::WARNING:
+                color = Colors::YELLOW;
+                break;
+            default:
+                color = Colors::WHITE;
+                break;
+        }
+        
+        std::cout << color << message << Colors::RESET << std::endl;
     }
 
     // Смена языка
@@ -111,14 +124,14 @@ public:
         } else if (choice == "2") {
             newLanguage = "ru";
         } else {
-            showError(tr("invalid_choice"));
+            showMessage(MessageType::ERROR, tr("invalid_choice"));
             waitForEnter();
             return;
         }
         
         auto newLocale = LocaleManager::loadLocale(newLanguage);
         if (newLocale.empty()) {
-            showError(tr("language_load_failed"));
+            showMessage(MessageType::ERROR, tr("language_load_failed"));
         } else {
             locale = newLocale;
             
@@ -126,9 +139,111 @@ public:
             config.language = newLanguage;
             configManager.saveConfig(config);
             
-            showSuccess(tr("language_changed"));
+            showMessage(MessageType::SUCCESS, tr("language_changed"));
         }
 
+        waitForEnter();
+    }
+
+    // Управление логами
+    void manageLogs() {
+    while (true) {
+        clearScreen();
+        drawHeader(tr("logs_management"));
+        
+        std::cout << Colors::MAGENTA << "📋 " << tr("logs_menu") << ":" << Colors::RESET << std::endl;
+        std::cout << std::endl;
+        
+        std::cout << Colors::CYAN << "1. 📄 " << tr("view_last_logs") << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "2. 🗑️  " << tr("clear_all_logs") << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "3. 📁 " << tr("show_log_path") << Colors::RESET << std::endl;
+        std::cout << Colors::RED << "Q. ↩️  " << tr("back") << Colors::RESET << std::endl;
+        
+        std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
+        std::string choice;
+        std::getline(std::cin, choice);
+        
+        if (choice == "1") {
+            showLastLogs();
+        } else if (choice == "2") {
+            clearAllLogs();
+        } else if (choice == "3") {
+            showLogFilePath();
+        } else if (choice == "Q" || choice == "q") {
+            break;
+        } else {
+            showMessage(MessageType::ERROR, tr("invalid_choice"));
+            waitForEnter();
+        }
+    }
+}
+
+    // Показать последние логи
+    void showLastLogs() {
+        clearScreen();
+        drawHeader(tr("last_system_logs"));
+        
+        auto logs = Logger::getInstance().getLastLines(50);
+        
+        if (logs.empty()) {
+            showMessage(MessageType::INFO, tr("logs_empty"));
+        } else {
+            std::cout << Colors::CYAN << tr("last_lines") << " " << logs.size() << ":" << Colors::RESET << std::endl;
+            std::cout << std::endl;
+            
+            for (const auto& log : logs) {
+                // Раскрашиваем логи по уровню
+                if (log.find("[ERROR]") != std::string::npos) {
+                    std::cout << Colors::RED << log << Colors::RESET << std::endl;
+                } else if (log.find("[WARNING]") != std::string::npos) {
+                    std::cout << Colors::YELLOW << log << Colors::RESET << std::endl;
+                } else {
+                    std::cout << Colors::WHITE << log << Colors::RESET << std::endl;
+                }
+            }
+        }
+        
+        waitForEnter();
+    }
+
+    // Очистить все логи
+    void clearAllLogs() {
+        clearScreen();
+        drawHeader(tr("clear_all_logs"));
+        
+        std::cout << Colors::YELLOW << "❓ " << tr("clear_logs_confirm") << " (y/N): " << Colors::RESET;
+        std::string answer;
+        std::getline(std::cin, answer);
+        
+        if (answer == "y" || answer == "Y" || answer == "да") {
+            Logger::getInstance().clearLogs();
+            showMessage(MessageType::SUCCESS, tr("logs_cleared"));
+        } else {
+            showMessage(MessageType::INFO, tr("clear_cancelled"));
+        }
+        
+        waitForEnter();
+    }
+
+    // Показать путь к файлу логов
+    void showLogFilePath() {
+        clearScreen();
+        drawHeader(tr("log_file_path"));
+        
+        std::string logPath = Logger::getInstance().getLogFilePath();
+        std::cout << Colors::CYAN << tr("log_file") << ": " << Colors::WHITE << logPath << Colors::RESET << std::endl;
+        
+        // Проверяем размер файла
+        if (std::filesystem::exists(logPath)) {
+            auto fileSize = std::filesystem::file_size(logPath);
+            double sizeMB = static_cast<double>(fileSize) / (1024 * 1024);
+            
+            std::cout << Colors::CYAN << tr("file_size") << ": " << Colors::WHITE 
+                    << std::fixed << std::setprecision(2) << sizeMB << " MB" << Colors::RESET << std::endl;
+        } else {
+            std::cout << Colors::YELLOW << tr("file_not_exists") << Colors::RESET << std::endl;
+        }
+        
         waitForEnter();
     }
 
@@ -161,8 +276,9 @@ public:
             std::cout << Colors::CYAN << "2. 🌐 " << tr("menu_api_setup") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "3. 🚀 " << tr("menu_api_manage") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "4. 📰 " << tr("menu_news_editor") << Colors::RESET << std::endl;
-            std::cout << Colors::CYAN << "5. ℹ️   " << tr("menu_system_info") << Colors::RESET << std::endl;
-            std::cout << Colors::CYAN << "6. 🌍 " << tr("menu_change_language") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "5. 📊 " << tr("menu_logs_manage") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "6. ℹ️   " << tr("menu_system_info") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "7. 🌍 " << tr("menu_change_language") << Colors::RESET << std::endl;
             std::cout << Colors::RED << "Q. 🚪 " << tr("menu_exit") << Colors::RESET << std::endl;
             
             std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
@@ -179,14 +295,16 @@ public:
             } else if (choice == "4") {
                 showNewsEditorMenu();
             } else if (choice == "5") {
-                showSystemInfo();
+                manageLogs();
             } else if (choice == "6") {
+                showSystemInfo();
+            } else if (choice == "7") {
                 changeLanguage();
             } else if (choice == "Q" || choice == "q") {
                 exitApplication();
                 break;
             } else {
-                showError(tr("invalid_choice"));
+                showMessage(MessageType::ERROR, tr("invalid_choice"));
                 waitForEnter();
             }
         }
@@ -240,24 +358,24 @@ private:
             if (!pass.empty()) currentConfig.password = pass;
 
             if (configManager.saveConfig(currentConfig)) {
-                showSuccess(tr("settings_saved"));
+                showMessage(MessageType::SUCCESS, tr("settings_saved"));
             } else {
-                showError("Failed to save settings");
+                showMessage(MessageType::ERROR, "Failed to save settings");
             }
         }
 
         std::cout << std::endl << Colors::YELLOW << "🔍 " << tr("testing_connection") << "..." << Colors::RESET << std::endl;
         if (dbService.testConnection()) {
-            showSuccess(tr("connection_success"));
+            showMessage(MessageType::SUCCESS, tr("connection_success"));
             std::cout << Colors::YELLOW << "⚙️  " << tr("setting_up_tables") << "..." << Colors::RESET << std::endl;
             if (dbService.setupDatabase()) {
-                showSuccess(tr("db_setup_success"));
+                showMessage(MessageType::SUCCESS, tr("db_setup_success"));
             } else {
-                showError(tr("db_setup_error"));
+                showMessage(MessageType::ERROR, tr("db_setup_error"));
             }
         } else {
-            showError(tr("connection_error"));
-            showInfo(tr("check_settings"));
+            showMessage(MessageType::ERROR, tr("connection_error"));
+            showMessage(MessageType::INFO, tr("check_settings"));
         }
 
         waitForEnter();
@@ -314,13 +432,13 @@ private:
             }
 
             if (configManager.saveApiConfig(currentConfig)) {
-                showSuccess(tr("api_settings_saved"));
+                showMessage(MessageType::SUCCESS, tr("api_settings_saved"));
                 
                 if (apiRunning) {
-                    showWarning(tr("api_restart_required"));
+                    showMessage(MessageType::WARNING, tr("api_restart_required"));
                 }
             } else {
-                showError("Failed to save API settings");
+                showMessage(MessageType::ERROR, "Failed to save API settings");
             }
         }
 
@@ -333,7 +451,7 @@ private:
         drawHeader(tr("api_manage_title"));
         
         if (apiRunning) {
-            showSuccess(tr("api_already_running"));
+            showMessage(MessageType::SUCCESS, tr("api_already_running"));
             
             // Получаем текущую конфигурацию для отображения правильного адреса
             ApiConfig currentConfig;
@@ -357,21 +475,21 @@ private:
                 // Даем больше времени для корректной остановки
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                 
-                showSuccess(tr("api_stop_success"));
+                showMessage(MessageType::SUCCESS, tr("api_stop_success"));
             } else {
-                showInfo(tr("api_keep_running"));
+                showMessage(MessageType::INFO, tr("api_keep_running"));
             }
         } else {
             std::cout << Colors::YELLOW << "🔍 " << tr("checking_db") << "..." << Colors::RESET << std::endl;
             if (dbService.testConnection()) {
-                showSuccess(tr("db_available"));
+                showMessage(MessageType::SUCCESS, tr("db_available"));
                 std::cout << Colors::YELLOW << "🚀 " << tr("starting_api") << "..." << Colors::RESET << std::endl;
                 
                 // API Service сам загружает конфигурацию при запуске
                 if (apiService.start()) {
                     apiRunning = true;
                     std::cout << std::endl;
-                    showSuccess(tr("api_start_success"));
+                    showMessage(MessageType::SUCCESS, tr("api_start_success"));
                     
                     // Получаем текущую конфигурацию для отображения правильного адреса
                     ApiConfig currentConfig;
@@ -386,11 +504,11 @@ private:
                     std::cout << Colors::CYAN << "   📁 GET /portfolio  - " << Colors::WHITE << "Portfolio management" << Colors::RESET << std::endl;
                     std::cout << Colors::CYAN << "   📰 GET /news       - " << Colors::WHITE << "News articles (read-only)" << Colors::RESET << std::endl;
                 } else {
-                    showError(tr("api_start_error"));
+                    showMessage(MessageType::ERROR, tr("api_start_error"));
                 }
             } else {
-                showError(tr("db_unavailable"));
-                showInfo(tr("setup_db_first"));
+                showMessage(MessageType::ERROR, tr("db_unavailable"));
+                showMessage(MessageType::INFO, tr("setup_db_first"));
             }
         }
 
@@ -434,7 +552,7 @@ private:
             apiRunning = false;
             // Ждем больше времени для корректной остановки
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            showSuccess(tr("api_stop_success"));
+            showMessage(MessageType::SUCCESS, tr("api_stop_success"));
         }
         
         std::cout << std::endl << Colors::GREEN << "👋 " << tr("thank_you") << Colors::RESET << std::endl;
@@ -454,7 +572,7 @@ private:
             std::cout << Colors::CYAN << "2. ✏️  " << tr("news_create") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "3. 🔄 " << tr("news_edit") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "4. 🗑️  " << tr("news_delete") << Colors::RESET << std::endl;
-            std::cout << Colors::RED << "Q. ↩️  " << tr("news_back") << Colors::RESET << std::endl;
+            std::cout << Colors::RED << "Q. ↩️  " << tr("back") << Colors::RESET << std::endl;
             
             std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
             std::string choice;
@@ -487,10 +605,10 @@ private:
                         std::string filename = articles[num-1];
                         articleEditor.editArticle(filename);
                     } else {
-                        showError(tr("invalid_article_number"));
+                        showMessage(MessageType::ERROR, tr("invalid_article_number"));
                     }
                 } catch (...) {
-                    showError(tr("invalid_article_number"));
+                    showMessage(MessageType::ERROR, tr("invalid_article_number"));
                 }
             } else if (choice == "4") {
                 articleEditor.listArticles();
@@ -513,22 +631,22 @@ private:
                         std::string filename = "news/" + articles[num-1];
                         if (confirmAction("Вы уверены, что хотите удалить статью?")) {
                             if (std::filesystem::remove(filename)) {
-                                showSuccess(tr("article_deleted"));
+                                showMessage(MessageType::SUCCESS, tr("article_deleted"));
                             } else {
-                                showError("Ошибка удаления статьи");
+                                showMessage(MessageType::ERROR, "Ошибка удаления статьи");
                             }
                         }
                     } else {
-                        showError(tr("invalid_article_number"));
+                        showMessage(MessageType::ERROR, tr("invalid_article_number"));
                     }
                 } catch (...) {
-                    showError(tr("invalid_article_number"));
+                    showMessage(MessageType::ERROR, tr("invalid_article_number"));
                 }
                 waitForEnter();
             } else if (choice == "Q" || choice == "q") {
                 break;
             } else {
-                showError(tr("invalid_choice"));
+                showMessage(MessageType::ERROR, tr("invalid_choice"));
                 waitForEnter();
             }
         }

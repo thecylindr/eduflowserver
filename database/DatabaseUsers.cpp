@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <iostream>
 #include <sstream>
+#include "logger/logger.h"
 
 // User management
 bool DatabaseService::addUser(const User& user) {
@@ -25,6 +26,7 @@ bool DatabaseService::addUser(const User& user) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
     
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        Logger::getInstance().log("❌ Database error in addUser: " + std::string(PQerrorMessage(connection)), "ERROR");
         PQclear(res);
         return false;
     }

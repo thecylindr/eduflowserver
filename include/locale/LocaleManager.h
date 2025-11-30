@@ -1,4 +1,3 @@
-// LocaleManager.h
 #ifndef LOCALEMANAGER_H
 #define LOCALEMANAGER_H
 

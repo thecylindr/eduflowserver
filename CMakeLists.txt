@@ -198,16 +198,21 @@ set(SOURCES)
 set(HEADERS)
 
 # Проверяем каждый файл индивидуально
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
-    list(APPEND SOURCES "src/main.cpp")
-    message(STATUS "Found: src/main.cpp")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/main.cpp")
+    list(APPEND SOURCES "main/main.cpp")
+    message(STATUS "Found: main/main.cpp")
 else()
-    message(FATAL_ERROR "Missing required file: src/main.cpp")
+    message(FATAL_ERROR "Missing required file: main/main.cpp")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseSetup.cpp")
     list(APPEND SOURCES "database/DatabaseSetup.cpp")
     message(STATUS "Found: database/DatabaseSetup.cpp")
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/logger/logger.cpp")
+    list(APPEND SOURCES "logger/logger.cpp")
+    message(STATUS "Found: logger/logger.cpp")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/database/DatabaseUsers.cpp")
@@ -330,9 +335,9 @@ else()
     message(FATAL_ERROR "Missing required file: api/ApiServiceAuth.cpp")
 endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/LocaleManager.cpp")
-    list(APPEND SOURCES "src/LocaleManager.cpp")
-    message(STATUS "Found: src/LocaleManager.cpp")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/locale/LocaleManager.cpp")
+    list(APPEND SOURCES "locale/LocaleManager.cpp")
+    message(STATUS "Found: locale/LocaleManager.cpp")
 endif()
 
 # Проверяем заголовочные файлы
@@ -348,8 +353,8 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/api/ApiService.h")
     list(APPEND HEADERS "api/ApiService.h")
 endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/LocaleManager.h")
-    list(APPEND HEADERS "src/LocaleManager.h")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/locale/LocaleManager.h")
+    list(APPEND HEADERS "locale/LocaleManager.h")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/article/ArticleEditor.h")
@@ -361,15 +366,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/article/ArticleEditor.cpp")
 endif()
 
 # Проверяем наличие json.hpp
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/json.hpp")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/json.hpp")
     message(STATUS "Found local json.hpp - using bundled JSON library")
-    list(APPEND HEADERS "src/json.hpp")
+    list(APPEND HEADERS "main/json.hpp")
 else()
-    message(FATAL_ERROR "JSON library not found! Please place json.hpp in src/ directory")
+    message(FATAL_ERROR "JSON library not found! Please place json.hpp in main/ directory")
 endif()
 
 if(NOT SOURCES)
-    message(FATAL_ERROR "No source files found in src/ directory!")
+    message(FATAL_ERROR "No source files found in main/ directory!")
 endif()
 
 message(STATUS "Total source files: ${SOURCES}")
@@ -380,7 +385,7 @@ add_executable(StudentManagementSystem ${SOURCES} ${HEADERS})
 # Подключение библиотек
 target_include_directories(StudentManagementSystem PRIVATE 
     ${POSTGRESQL_INCLUDE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/main
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/database
     ${CMAKE_CURRENT_SOURCE_DIR}/configs

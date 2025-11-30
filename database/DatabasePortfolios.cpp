@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <iostream>
 #include <sstream>
+#include "logger/logger.h"
 
 // Portfolio management
 std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
@@ -23,7 +24,7 @@ std::vector<StudentPortfolio> DatabaseService::getPortfolios() {
     
     PGresult* res = PQexec(connection, sql.c_str());
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cerr << "Ошибка выполнения запроса портфолио: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка выполнения запроса портфолио: " + std::string(PQerrorMessage(connection)), "ERROR");
         PQclear(res);
         return portfolios;
     }
@@ -73,10 +74,8 @@ bool DatabaseService::addPortfolio(const StudentPortfolio& portfolio) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 3, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
-    if (success) {
-        std::cout << "✅ Портфолио добавлено" << std::endl;
-    } else {
-        std::cerr << "Ошибка добавления портфолио: " << PQerrorMessage(connection) << std::endl;
+    if (!success) {
+        Logger::getInstance().log("❌ Ошибка добавления портфолио: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     
     PQclear(res);
@@ -107,7 +106,7 @@ bool DatabaseService::updatePortfolio(const StudentPortfolio& portfolio) {
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
-        std::cerr << "Ошибка обновления портфолио: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка обновления портфолио: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     
     PQclear(res);
@@ -128,7 +127,7 @@ bool DatabaseService::deletePortfolio(int portfolioId) {
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
     if (!success) {
-        std::cerr << "Ошибка удаления портфолио: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка удаления портфолио: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     
     PQclear(res);

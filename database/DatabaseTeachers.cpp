@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <iostream>
 #include <sstream>
+#include "logger/logger.h"
 
 // Teacher management
 std::vector<Teacher> DatabaseService::getTeachers() {
@@ -20,6 +21,7 @@ std::vector<Teacher> DatabaseService::getTeachers() {
     
     PGresult* res = PQexec(connection, sql.c_str());
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        Logger::getInstance().log("❌ Database error in getTeachers: " + std::string(PQerrorMessage(connection)), "ERROR");
         PQclear(res);
         return teachers;
     }
@@ -70,31 +72,27 @@ bool DatabaseService::addTeacher(const Teacher& teacher) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 6, NULL, params, NULL, NULL, 0);
     
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cerr << "Database error in addTeacher: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Database error in addTeacher: " + std::string(PQerrorMessage(connection)), "ERROR");
         PQclear(res);
         return false;
     }
     
-    int teacherId = std::stoi(PQgetvalue(res, 0, 0));  // Используем переменную
+    // Получаем только specializationCode, так как teacherId больше не используется
     int specializationCode = std::stoi(PQgetvalue(res, 0, 1));
     PQclear(res);
-    
-    std::cout << "✅ Teacher added with ID: " << teacherId << ", specialization code: " << specializationCode << std::endl;  // Используем teacherId здесь
     
     // Теперь добавляем специализации в specialization_list
     if (!teacher.specializations.empty()) {
         for (const auto& spec : teacher.specializations) {
             std::string specSql = "INSERT INTO specialization_list (specialization, name) VALUES ($1, $2)";
             const char* specParams[2] = {
-                std::to_string(specializationCode).c_str(),  // используем сгенерированный код
+                std::to_string(specializationCode).c_str(),
                 spec.name.c_str()
             };
             
             PGresult* specRes = PQexecParams(connection, specSql.c_str(), 2, NULL, specParams, NULL, NULL, 0);
             if (PQresultStatus(specRes) != PGRES_COMMAND_OK) {
-                std::cerr << "Warning: Failed to add specialization: " << PQerrorMessage(connection) << std::endl;
-            } else {
-                std::cout << "✅ Added specialization: " << spec.name << " with code: " << specializationCode << std::endl;
+                Logger::getInstance().log("❌ Failed to add specialization: " + std::string(PQerrorMessage(connection)), "ERROR");
             }
             PQclear(specRes);
         }
@@ -203,9 +201,6 @@ bool DatabaseService::removeAllTeacherSpecializations(int teacherId) {
         return false;
     }
     
-    std::cout << "🗑️ Удаление всех специализаций преподавателя ID: " << teacherId 
-              << " (код специализации: " << teacher.specializationCode << ")" << std::endl;
-    
     // Используем specializationCode вместо specialization
     std::string sql = "DELETE FROM specialization_list WHERE specialization = $1";
     const char* params[1] = { std::to_string(teacher.specializationCode).c_str() };
@@ -213,10 +208,8 @@ bool DatabaseService::removeAllTeacherSpecializations(int teacherId) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     
-    if (success) {
-        std::cout << "✅ Все специализации преподавателя удалены" << std::endl;
-    } else {
-        std::cerr << "❌ Ошибка удаления специализаций: " << PQerrorMessage(connection) << std::endl;
+    if (!success) {
+        Logger::getInstance().log("❌ Ошибка удаления специализаций: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     
     PQclear(res);

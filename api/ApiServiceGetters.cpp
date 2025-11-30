@@ -32,25 +32,15 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
         return createJsonResponse(errorResponse.dump(), 404);
     }
     
-    // Получаем ВСЕ сессии пользователя из базы данных
     auto userSessions = dbService.getSessionsByUserId(userId);
     json sessionsArray = json::array();
     auto now = std::chrono::system_clock::now();
-    
-    std::cout << "📊 Загружено сессий из БД: " << userSessions.size() << std::endl;
     
     for (const auto& session : userSessions) {
         if (now > session.expiresAt) continue;
         
         auto age = std::chrono::duration_cast<std::chrono::hours>(now - session.createdAt);
         auto inactive = std::chrono::duration_cast<std::chrono::minutes>(now - session.lastActivity);
-        
-        // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ КАЖДОЙ СЕССИИ
-        std::cout << "🔍 Сессия DETAIL - Token: " << session.token.substr(0, 16) << "..."
-                  << ", OS: '" << session.userOS << "'"
-                  << ", IP: '" << session.ipAddress << "'"
-                  << ", UserId: " << session.userId 
-                  << ", Email: " << session.email << std::endl;
         
         json sessionJson;
         sessionJson["token"] = session.token;
@@ -68,7 +58,6 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
         sessionsArray.push_back(sessionJson);
     }
     
-    // Формируем ответ с реальными данными
     json userJson;
     userJson["userId"] = user.userId;
     userJson["login"] = user.login;
@@ -82,9 +71,6 @@ std::string ApiService::getProfile(const std::string& sessionToken) {
     json response;
     response["success"] = true;
     response["data"] = userJson;
-    
-    std::cout << "✅ Profile data sent for user: " << user.login << std::endl;
-    std::cout << "📊 Sessions sent to client: " << sessionsArray.size() << std::endl;
     
     return createJsonResponse(response.dump());
 }
@@ -111,7 +97,6 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         teacherJson["email"] = teacher.email;
         teacherJson["phone_number"] = teacher.phoneNumber;
         
-        // Получаем специализации преподавателя
         auto specializations = dbService.getTeacherSpecializations(teacher.teacherId);
         json specArray = json::array();
         
@@ -129,7 +114,7 @@ std::string ApiService::getTeachersJson(const std::string& sessionToken) {
         }
         
         teacherJson["specializations"] = specArray;
-        teacherJson["specialization"] = specNames; // Для обратной совместимости
+        teacherJson["specialization"] = specNames;
         
         teachersArray.push_back(teacherJson);
     }
@@ -203,8 +188,6 @@ std::string ApiService::getGroupsJson(const std::string& sessionToken) {
 }
 
 std::string ApiService::getSpecializationsJson(const std::string& sessionToken) {
-    std::cout << "📋 Получение списка уникальных специализаций..." << std::endl;
-    
     if (!validateSession(sessionToken)) {
         json errorResponse;
         errorResponse["success"] = false;
@@ -213,12 +196,12 @@ std::string ApiService::getSpecializationsJson(const std::string& sessionToken) 
     }
 
     std::lock_guard<std::mutex> lock(dbMutex);
-    auto uniqueNames = dbService.getUniqueSpecializationNames();  // Получаем уникальные имена из БД
+    auto uniqueNames = dbService.getUniqueSpecializationNames();
 
     json data = json::array();
     for (const auto& name : uniqueNames) {
         json specJson;
-        specJson["name"] = name;  // Возвращаем только имя для ComboBox
+        specJson["name"] = name;
         data.push_back(specJson);
     }
 
@@ -226,12 +209,10 @@ std::string ApiService::getSpecializationsJson(const std::string& sessionToken) 
     response["success"] = true;
     response["data"] = data;
 
-    std::cout << "✅ Отправлено уникальных специализаций: " << data.size() << std::endl;
     return createJsonResponse(response.dump());
 }
 
 std::string ApiService::getTeacherSpecializationsJson(int teacherId) {
-    
     std::lock_guard<std::mutex> lock(dbMutex);
     auto specializations = dbService.getTeacherSpecializations(teacherId);
     json j = json::array();
@@ -250,8 +231,6 @@ std::string ApiService::getTeacherSpecializationsJson(int teacherId) {
 }
 
 std::string ApiService::getEventCategoriesJson() {
-    std::cout << "📋 Получение списка категорий событий..." << std::endl;
-    
     auto categories = dbService.getEventCategories();
     json response;
     response["success"] = true;
@@ -269,8 +248,6 @@ std::string ApiService::getEventCategoriesJson() {
 }
 
 std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
-    std::cout << "📋 Получение списка портфолио..." << std::endl;
-    
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
     }
@@ -291,19 +268,15 @@ std::string ApiService::getPortfolioJson(const std::string& sessionToken) {
         response["data"].push_back(portfolioJson);
     }
     
-    std::cout << "✅ Отправлено портфолио: " << response["data"].size() << " записей" << std::endl;
     return createJsonResponse(response.dump());
 }
 
 std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
-    std::cout << "📊 Получение данных для дашборда..." << std::endl;
-    
     if (!validateSession(sessionToken)) {
         return createJsonResponse("{\"success\": false, \"error\": \"Unauthorized\"}", 401);
     }
     
     try {
-        // Получаем информацию о пользователе
         std::string userId = getUserIdFromSession(sessionToken);
         User user = dbService.getUserById(std::stoi(userId));
         
@@ -311,7 +284,6 @@ std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
             return createJsonResponse("{\"success\": false, \"error\": \"User not found\"}", 404);
         }
         
-        // Получаем статистику
         std::lock_guard<std::mutex> lock(dbMutex);
         
         int teachersCount = dbService.getTeachersCount();
@@ -320,7 +292,6 @@ std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
         int portfoliosCount = dbService.getPortfoliosCount();
         int eventsCount = dbService.getEventsCount();
         
-        // Формируем ответ
         json dashboardData;
         dashboardData["user"] = {
             {"login", user.login},
@@ -347,14 +318,11 @@ std::string ApiService::handleGetDashboard(const std::string& sessionToken) {
         return createJsonResponse(response.dump());
         
     } catch (const std::exception& e) {
-        std::cout << "💥 Ошибка получения данных дашборда: " << e.what() << std::endl;
         return createJsonResponse("{\"success\": false, \"error\": \"Dashboard data error\"}", 500);
     }
 }
 
 std::string ApiService::handleGetStudentsByGroup(int groupId) {
-    std::cout << "👥 Получение студентов группы ID: " << groupId << std::endl;
-
     std::lock_guard<std::mutex> lock(dbMutex);
     auto students = dbService.getStudentsByGroup(groupId);
     json j = json::array();

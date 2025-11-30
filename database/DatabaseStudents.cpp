@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <iostream>
 #include <sstream>
+#include "logger/logger.h"
 
 // Student management
 std::vector<Student> DatabaseService::getStudents() {
@@ -16,7 +17,7 @@ std::vector<Student> DatabaseService::getStudents() {
         "SELECT student_code, last_name, first_name, middle_name, phone_number, email, group_id, passport_series, passport_number FROM students");
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cerr << "Ошибка выполнения запроса: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка выполнения запроса getStudents: " + std::string(PQerrorMessage(connection)), "ERROR");
         PQclear(res);
         return students;
     }
@@ -101,7 +102,7 @@ bool DatabaseService::addStudent(const Student& student) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 8, NULL, params, NULL, NULL, 0);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         success = false;
-        std::cerr << "Ошибка добавления студента: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка добавления студента: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     PQclear(res);
     
@@ -113,7 +114,7 @@ bool DatabaseService::addStudent(const Student& student) {
         PGresult* updateRes = PQexecParams(connection, updateSql.c_str(), 1, NULL, updateParams, NULL, NULL, 0);
         if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
             success = false;
-            std::cerr << "Ошибка обновления счетчика группы: " << PQerrorMessage(connection) << std::endl;
+            Logger::getInstance().log("❌ Ошибка обновления счетчика группы: " + std::string(PQerrorMessage(connection)), "ERROR");
         }
         PQclear(updateRes);
     }
@@ -122,11 +123,9 @@ bool DatabaseService::addStudent(const Student& student) {
     if (success) {
         PGresult* commitRes = PQexec(connection, "COMMIT");
         PQclear(commitRes);
-        std::cout << "✅ Студент добавлен, счетчик группы обновлен" << std::endl;
     } else {
         PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
         PQclear(rollbackRes);
-        std::cerr << "❌ Ошибка при добавлении студента, транзакция откатана" << std::endl;
     }
     
     return success;
@@ -172,7 +171,7 @@ bool DatabaseService::updateStudent(const Student& student) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 9, NULL, params, NULL, NULL, 0);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         success = false;
-        std::cerr << "Ошибка обновления студента: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка обновления студента: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     PQclear(res);
     
@@ -186,7 +185,7 @@ bool DatabaseService::updateStudent(const Student& student) {
             PGresult* decreaseRes = PQexecParams(connection, decreaseSql.c_str(), 1, NULL, decreaseParams, NULL, NULL, 0);
             if (PQresultStatus(decreaseRes) != PGRES_COMMAND_OK) {
                 success = false;
-                std::cerr << "Ошибка уменьшения счетчика старой группы: " << PQerrorMessage(connection) << std::endl;
+                Logger::getInstance().log("❌ Ошибка уменьшения счетчика старой группы: " + std::string(PQerrorMessage(connection)), "ERROR");
             }
             PQclear(decreaseRes);
         }
@@ -199,14 +198,9 @@ bool DatabaseService::updateStudent(const Student& student) {
             PGresult* increaseRes = PQexecParams(connection, increaseSql.c_str(), 1, NULL, increaseParams, NULL, NULL, 0);
             if (PQresultStatus(increaseRes) != PGRES_COMMAND_OK) {
                 success = false;
-                std::cerr << "Ошибка увеличения счетчика новой группы: " << PQerrorMessage(connection) << std::endl;
+                Logger::getInstance().log("❌ Ошибка увеличения счетчика новой группы: " + std::string(PQerrorMessage(connection)), "ERROR");
             }
             PQclear(increaseRes);
-        }
-        
-        if (success) {
-            std::cout << "🔄 Счетчики групп обновлены: старая группа " << oldStudent.groupId 
-                    << " -> новая группа " << student.groupId << std::endl;
         }
     }
     
@@ -214,11 +208,9 @@ bool DatabaseService::updateStudent(const Student& student) {
     if (success) {
         PGresult* commitRes = PQexec(connection, "COMMIT");
         PQclear(commitRes);
-        std::cout << "✅ Студент обновлен" << std::endl;
     } else {
         PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
         PQclear(rollbackRes);
-        std::cerr << "❌ Ошибка при обновлении студента, транзакция откатана" << std::endl;
     }
     
     return success;
@@ -254,7 +246,7 @@ bool DatabaseService::deleteStudent(int studentCode) {
     PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         success = false;
-        std::cerr << "Ошибка удаления студента: " << PQerrorMessage(connection) << std::endl;
+        Logger::getInstance().log("❌ Ошибка удаления студента: " + std::string(PQerrorMessage(connection)), "ERROR");
     }
     PQclear(res);
     
@@ -266,24 +258,18 @@ bool DatabaseService::deleteStudent(int studentCode) {
         PGresult* updateRes = PQexecParams(connection, updateSql.c_str(), 1, NULL, updateParams, NULL, NULL, 0);
         if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
             success = false;
-            std::cerr << "Ошибка обновления счетчика группы: " << PQerrorMessage(connection) << std::endl;
+            Logger::getInstance().log("❌ Ошибка обновления счетчика группы: " + std::string(PQerrorMessage(connection)), "ERROR");
         }
         PQclear(updateRes);
-        
-        if (success) {
-            std::cout << "🔽 Счетчик группы " << student.groupId << " уменьшен на 1" << std::endl;
-        }
     }
     
     // Завершаем транзакцию
     if (success) {
         PGresult* commitRes = PQexec(connection, "COMMIT");
         PQclear(commitRes);
-        std::cout << "✅ Студент удален" << std::endl;
     } else {
         PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
         PQclear(rollbackRes);
-        std::cerr << "❌ Ошибка при удалении студента, транзакция откатана" << std::endl;
     }
     
     return success;
@@ -347,26 +333,19 @@ bool DatabaseService::syncStudentCounts() {
         PGresult* res = PQexecParams(connection, sql.c_str(), 2, NULL, params, NULL, NULL, 0);
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
             success = false;
-            std::cerr << "Ошибка синхронизации счетчика для группы " << group.groupId 
-                    << ": " << PQerrorMessage(connection) << std::endl;
+            Logger::getInstance().log("❌ Ошибка синхронизации счетчика для группы " + std::to_string(group.groupId) 
+                    + ": " + std::string(PQerrorMessage(connection)), "ERROR");
         }
         PQclear(res);
-        
-        if (success) {
-            std::cout << "🔄 Группа " << group.groupId << ": " << group.studentCount 
-                    << " -> " << actualCount << " студентов" << std::endl;
-        }
     }
     
     // Завершаем транзакцию
     if (success) {
         PGresult* commitRes = PQexec(connection, "COMMIT");
         PQclear(commitRes);
-        std::cout << "✅ Синхронизация счетчиков студентов завершена" << std::endl;
     } else {
         PGresult* rollbackRes = PQexec(connection, "ROLLBACK");
         PQclear(rollbackRes);
-        std::cerr << "❌ Ошибка при синхронизации счетчиков, транзакция откатана" << std::endl;
     }
     
     return success;

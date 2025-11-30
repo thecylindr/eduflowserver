@@ -4,47 +4,55 @@
 #include <sstream>
 #include <iomanip>
 #include <ctime>
+#include "logger/logger.h"
+
+// Sessions management
 std::chrono::system_clock::time_point stringToTimestamp(const std::string& str) {
-std::tm tm = {};
-std::stringstream ss(str);
-ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-std::time_t t = std::mktime(&tm);
-return std::chrono::system_clock::from_time_t(t);
+    std::tm tm = {};
+    std::stringstream ss(str);
+    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+    std::time_t t = std::mktime(&tm);
+    return std::chrono::system_clock::from_time_t(t);
 }
+
 std::string timestampToString(const std::chrono::system_clock::time_point& tp) {
-std::time_t t = std::chrono::system_clock::to_time_t(tp);
-std::stringstream ss;
-ss << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
-return ss.str();
+    std::time_t t = std::chrono::system_clock::to_time_t(tp);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
+    return ss.str();
 }
+
 bool DatabaseService::addSession(const Session& session) {
-configManager.loadConfig(currentConfig);
-if (!connection && !connect(currentConfig)) {
-return false;
-}
-std::string sql = "INSERT INTO sessions (token, user_id, created_at, last_activity, expires_at, ip_address, user_agent) "
-"VALUES ($1, $2, $3, $4, $5, $6, $7)";
-std::string created = timestampToString(session.createdAt);
-std::string last = timestampToString(session.lastActivity);
-std::string expires = timestampToString(session.expiresAt);
-const char* params[7] = {
-session.token.c_str(),
-session.userId.c_str(),
-created.c_str(),
-last.c_str(),
-expires.c_str(),
-session.ipAddress.c_str(),
-session.userOS.c_str()
-};
-PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
-if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-std::cerr << "SQL error: " << PQerrorMessage(connection) << std::endl;
-PQclear(res);
-return false;
-}
-PQclear(res);
-return true;
-}
+    configManager.loadConfig(currentConfig);
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+
+    std::string sql = "INSERT INTO sessions (token, user_id, created_at, last_activity, expires_at, ip_address, user_agent) "
+    "VALUES ($1, $2, $3, $4, $5, $6, $7)";
+    std::string created = timestampToString(session.createdAt);
+    std::string last = timestampToString(session.lastActivity);
+    std::string expires = timestampToString(session.expiresAt);
+    const char* params[7] = {
+    session.token.c_str(),
+    session.userId.c_str(),
+    created.c_str(),
+    last.c_str(),
+    expires.c_str(),
+    session.ipAddress.c_str(),
+    session.userOS.c_str()
+    };
+
+    PGresult* res = PQexecParams(connection, sql.c_str(), 7, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        Logger::getInstance().log("❌ SQL error in addSession: " + std::string(PQerrorMessage(connection)), "ERROR");
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+    return true;
+    }
+
 Session DatabaseService::getSessionByToken(const std::string& token) {
     Session session;
     configManager.loadConfig(currentConfig);
@@ -99,10 +107,11 @@ bool DatabaseService::updateSessionLastActivity(const std::string& token, const 
     PQclear(res);
     return success;
     }
-    bool DatabaseService::deleteSession(const std::string& token) {
+
+bool DatabaseService::deleteSession(const std::string& token) {
     configManager.loadConfig(currentConfig);
     if (!connection && !connect(currentConfig)) {
-    return false;
+        return false;
     }
     std::string sql = "DELETE FROM sessions WHERE token = $1";
     const char* params[1] = { token.c_str() };
@@ -113,72 +122,76 @@ bool DatabaseService::updateSessionLastActivity(const std::string& token, const 
 }
 
 std::vector<Session> DatabaseService::getSessionsByUserId(const std::string& userId) {
-std::vector<Session> sessionsList;
-configManager.loadConfig(currentConfig);
-if (!connection && !connect(currentConfig)) {
-return sessionsList;
-}
-std::string sql = "SELECT session_id, token, user_id, created_at, last_activity, expires_at, ip_address, user_agent "
-"FROM sessions WHERE user_id = $1";
-const char* params[1] = { userId.c_str() };
-PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
-if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-PQclear(res);
-return sessionsList;
-}
-int rows = PQntuples(res);
-for (int i = 0; i < rows; i++) {
-Session session;
-session.sessionId = std::stoi(PQgetvalue(res, i, 0));
-session.token = PQgetvalue(res, i, 1);
-session.userId = PQgetvalue(res, i, 2);
-session.createdAt = stringToTimestamp(PQgetvalue(res, i, 3));
-session.lastActivity = stringToTimestamp(PQgetvalue(res, i, 4));
-session.expiresAt = stringToTimestamp(PQgetvalue(res, i, 5));
-session.ipAddress = PQgetvalue(res, i, 6);
-session.userOS = PQgetvalue(res, i, 7);
-sessionsList.push_back(session);
-}
-PQclear(res);
-return sessionsList;
-}
-std::vector<Session> DatabaseService::getAllActiveSessions() {
-std::vector<Session> sessionsList;
-configManager.loadConfig(currentConfig);
-if (!connection && !connect(currentConfig)) {
-return sessionsList;
-}
-std::string sql = "SELECT session_id, token, user_id, created_at, last_activity, expires_at, ip_address, user_agent "
-"FROM sessions WHERE expires_at > CURRENT_TIMESTAMP";
-PGresult* res = PQexec(connection, sql.c_str());
-if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-PQclear(res);
-return sessionsList;
-}
-int rows = PQntuples(res);
-for (int i = 0; i < rows; i++) {
-Session session;
-session.sessionId = std::stoi(PQgetvalue(res, i, 0));
-session.token = PQgetvalue(res, i, 1);
-session.userId = PQgetvalue(res, i, 2);
-session.createdAt = stringToTimestamp(PQgetvalue(res, i, 3));
-session.lastActivity = stringToTimestamp(PQgetvalue(res, i, 4));
-session.expiresAt = stringToTimestamp(PQgetvalue(res, i, 5));
-session.ipAddress = PQgetvalue(res, i, 6);
-session.userOS = PQgetvalue(res, i, 7);
-sessionsList.push_back(session);
-}
-PQclear(res);
-return sessionsList;
+    std::vector<Session> sessionsList;
+    configManager.loadConfig(currentConfig);
+    if (!connection && !connect(currentConfig)) {
+        return sessionsList;
+    }
+    std::string sql = "SELECT session_id, token, user_id, created_at, last_activity, expires_at, ip_address, user_agent "
+    "FROM sessions WHERE user_id = $1";
+    const char* params[1] = { userId.c_str() };
+    PGresult* res = PQexecParams(connection, sql.c_str(), 1, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return sessionsList;
+    }
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        Session session;
+        session.sessionId = std::stoi(PQgetvalue(res, i, 0));
+        session.token = PQgetvalue(res, i, 1);
+        session.userId = PQgetvalue(res, i, 2);
+        session.createdAt = stringToTimestamp(PQgetvalue(res, i, 3));
+        session.lastActivity = stringToTimestamp(PQgetvalue(res, i, 4));
+        session.expiresAt = stringToTimestamp(PQgetvalue(res, i, 5));
+        session.ipAddress = PQgetvalue(res, i, 6);
+        session.userOS = PQgetvalue(res, i, 7);
+        sessionsList.push_back(session);
+    }
+    PQclear(res);
+    return sessionsList;
+    }
+    std::vector<Session> DatabaseService::getAllActiveSessions() {
+    std::vector<Session> sessionsList;
+
+    configManager.loadConfig(currentConfig);
+    if (!connection && !connect(currentConfig)) {
+        return sessionsList;
+    }
+
+    std::string sql = "SELECT session_id, token, user_id, created_at, last_activity, expires_at, ip_address, user_agent "
+    "FROM sessions WHERE expires_at > CURRENT_TIMESTAMP";
+    PGresult* res = PQexec(connection, sql.c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        PQclear(res);
+        return sessionsList;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        Session session;
+        session.sessionId = std::stoi(PQgetvalue(res, i, 0));
+        session.token = PQgetvalue(res, i, 1);
+        session.userId = PQgetvalue(res, i, 2);
+        session.createdAt = stringToTimestamp(PQgetvalue(res, i, 3));
+        session.lastActivity = stringToTimestamp(PQgetvalue(res, i, 4));
+        session.expiresAt = stringToTimestamp(PQgetvalue(res, i, 5));
+        session.ipAddress = PQgetvalue(res, i, 6);
+        session.userOS = PQgetvalue(res, i, 7);
+        sessionsList.push_back(session);
+    }
+    PQclear(res);
+    return sessionsList;
 }
 bool DatabaseService::deleteExpiredSessions() {
-configManager.loadConfig(currentConfig);
-if (!connection && !connect(currentConfig)) {
-return false;
-}
-std::string sql = "DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP";
-PGresult* res = PQexec(connection, sql.c_str());
-bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-PQclear(res);
-return success;
+    configManager.loadConfig(currentConfig);
+    if (!connection && !connect(currentConfig)) {
+        return false;
+    }
+
+    std::string sql = "DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP";
+    PGresult* res = PQexec(connection, sql.c_str());
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+    return success;
 }

@@ -13,7 +13,6 @@ void ApiService::loadSessionsFromDB() {
             sessions[sess.token] = sess;
         }
     }
-    std::cout << "📥 Loaded " << activeSessions.size() << " active sessions from DB" << std::endl;
 }
 
 std::string ApiService::getSessionInfo(const std::string& token) {
@@ -74,8 +73,6 @@ std::string ApiService::handleGetSessions(const std::string& sessionToken) {
 }
 
 std::string ApiService::handleRevokeSession(const std::string& body, const std::string& sessionToken) {
-    std::cout << "🔐 Обработка отзыва сессии..." << std::endl;
-    
     if (!validateSession(sessionToken)) {
         json errorResponse;
         errorResponse["success"] = false;
@@ -83,11 +80,7 @@ std::string ApiService::handleRevokeSession(const std::string& body, const std::
         return createJsonResponse(errorResponse.dump(), 401);
     }
     
-    std::cout << "📦 Длина тела запроса: " << body.length() << " байт" << std::endl;
-    
-    // ПРОВЕРКА НА ПУСТОЕ ТЕЛО ЗАПРОСА
     if (body.empty()) {
-        std::cout << "❌ ПУСТОЕ ТЕЛО ЗАПРОСА!" << std::endl;
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Empty request body - token is required";
@@ -96,10 +89,8 @@ std::string ApiService::handleRevokeSession(const std::string& body, const std::
     
     try {
         json j = json::parse(body);
-        std::cout << "✅ JSON успешно распарсен" << std::endl;
         
         if (!j.contains("token") || j["token"].is_null() || j["token"].empty()) {
-            std::cout << "❌ Токен отсутствует или пустой в JSON" << std::endl;
             json errorResponse;
             errorResponse["success"] = false;
             errorResponse["error"] = "Token is required and cannot be empty";
@@ -109,70 +100,53 @@ std::string ApiService::handleRevokeSession(const std::string& body, const std::
         std::string targetToken = j["token"];
         std::string userId = getUserIdFromSession(sessionToken);
         
-        std::cout << "🎯 Отзыв сессии для пользователя: " << userId << std::endl;
-        std::cout << "🔑 Целевой токен: " << targetToken.substr(0, 16) << "..." << std::endl;
-        std::cout << "🔑 Текущий токен: " << sessionToken.substr(0, 16) << "..." << std::endl;
-        
         if (targetToken == sessionToken) {
-            std::cout << "❌ Пользователь пытается отозвать текущую сессию" << std::endl;
             json errorResponse;
             errorResponse["success"] = false;
             errorResponse["error"] = "Cannot revoke current session";
             return createJsonResponse(errorResponse.dump(), 400);
         }
         
-        // Получаем целевую сессию из базы данных
         Session targetSession = dbService.getSessionByToken(targetToken);
         
         if (targetSession.token.empty()) {
-            std::cout << "❌ Сессия не найдена в БД" << std::endl;
             json errorResponse;
             errorResponse["success"] = false;
             errorResponse["error"] = "Session not found";
             return createJsonResponse(errorResponse.dump(), 404);
         }
         
-        // Проверяем, что сессия принадлежит текущему пользователю
         if (targetSession.userId != userId) {
-            std::cout << "❌ Доступ запрещен: сессия принадлежит другому пользователю" << std::endl;
             json errorResponse;
             errorResponse["success"] = false;
             errorResponse["error"] = "Access denied";
             return createJsonResponse(errorResponse.dump(), 403);
         }
         
-        // УДАЛЯЕМ СЕССИЮ ИЗ БАЗЫ ДАННЫХ
         bool deleteSuccess = dbService.deleteSession(targetToken);
         
         if (deleteSuccess) {
-            // УДАЛЯЕМ СЕССИЮ ИЗ ПАМЯТИ
             {
                 std::lock_guard<std::mutex> lock(sessionsMutex);
                 sessions.erase(targetToken);
             }
-            
-            std::cout << "✅ Сессия успешно отозвана!" << std::endl;
             
             json response;
             response["success"] = true;
             response["message"] = "Session revoked successfully";
             return createJsonResponse(response.dump());
         } else {
-            std::cout << "❌ Ошибка при удалении сессии из базы данных" << std::endl;
             json errorResponse;
             errorResponse["success"] = false;
             errorResponse["error"] = "Failed to revoke session";
             return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const json::parse_error& e) {
-        std::cout << "💥 Ошибка парсинга JSON: " << e.what() << std::endl;
-        std::cout << "📦 Problematic body: " << body << std::endl;
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Invalid JSON format: " + std::string(e.what());
         return createJsonResponse(errorResponse.dump(), 400);
     } catch (const std::exception& e) {
-        std::cout << "💥 EXCEPTION в handleRevokeSession: " << e.what() << std::endl;
         json errorResponse;
         errorResponse["success"] = false;
         errorResponse["error"] = "Server error: " + std::string(e.what());
@@ -188,7 +162,6 @@ bool ApiService::validateSession(const std::string& token) {
     std::lock_guard<std::mutex> lock(sessionsMutex);
     auto it = sessions.find(token);
     if (it == sessions.end()) {
-        // Check DB if not in memory
         Session sess = dbService.getSessionByToken(token);
         if (sess.token.empty()) {
             return false;
@@ -209,13 +182,11 @@ bool ApiService::validateSession(const std::string& token) {
         return false;
     }
     
-    // Update last activity and expires
     auto newLast = now;
     auto newExpires = now + std::chrono::hours(apiConfig.sessionTimeoutHours);
     it->second.lastActivity = newLast;
     it->second.expiresAt = newExpires;
     
-    // Update in DB
     dbService.updateSessionLastActivity(token, newLast, newExpires);
     return true;
 }
@@ -225,7 +196,6 @@ bool ApiService::validateTokenInDatabase(const std::string& token) {
         return false;
     }
     
-    // Проверяем в базе данных
     Session sess = dbService.getSessionByToken(token);
     if (sess.token.empty()) {
         return false;
@@ -237,11 +207,9 @@ bool ApiService::validateTokenInDatabase(const std::string& token) {
         return false;
     }
     
-    // Обновляем время последней активности
     dbService.updateSessionLastActivity(token, now, now + std::chrono::hours(apiConfig.sessionTimeoutHours));
     return true;
 }
-
 
 void ApiService::cleanupExpiredSessions() {
     auto now = std::chrono::system_clock::now();
