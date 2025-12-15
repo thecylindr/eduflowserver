@@ -21,7 +21,7 @@ std::string ApiService::handleAddGroup(const std::string& body) {
         } else {
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Ошибка добавления группы.";
+            errorResponse["error"] = "Или преподаватель уже удалён, или такая группа существует..";
             return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
@@ -56,7 +56,7 @@ std::string ApiService::handleUpdateGroup(const std::string& body, int groupId) 
         } else {
             json errorResponse;
             errorResponse["success"] = false;
-            errorResponse["error"] = "Ошибка обновления группы.";
+            errorResponse["error"] = "Неизвестная ошибка.";
             return createJsonResponse(errorResponse.dump(), 500);
         }
     } catch (const std::exception& e) {
@@ -76,7 +76,7 @@ std::string ApiService::handleDeleteGroup(int groupId) {
     } else {
         json errorResponse;
         errorResponse["success"] = false;
-        errorResponse["error"] = "Ошибка удаления группы. Возможно, в ней ещё находятся студенты.";
+        errorResponse["error"] = "Ошибка удаления группы. Возможно в ней находятся студенты.";
         return createJsonResponse(errorResponse.dump(), 500);
     }
 }

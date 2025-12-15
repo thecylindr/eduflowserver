@@ -120,7 +120,7 @@ bool ApiService::start() {
         Logger::getInstance().log("❌ Не удалось загрузить конфигурацию API", "ERROR");
         return false;
     }
-    
+
     // Создаем сокет
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == INVALID_SOCKET_VAL) {
@@ -130,7 +130,7 @@ bool ApiService::start() {
     
     int opt = 1;
     
-    // КРОССПЛАТФОРМЕННАЯ НАСТРОЙКА СЕРВЕРНОГО СОКЕТА
+    // кроссплатформенная настройка серверного сокета
 #ifdef _WIN32
     // Windows: устанавливаем SO_REUSEADDR и неблокирующий режим
     if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) < 0) {
@@ -200,8 +200,8 @@ bool ApiService::start() {
         return false;
     }
     
-    // Слушаем
-    if (listen(serverSocket, SOMAXCONN) < 0) {
+    // Слушаем с использованием maxConnections из конфига
+    if (listen(serverSocket, apiConfig.maxConnections) < 0) {
         Logger::getInstance().log("❌ Не удалось начать прослушивание", "ERROR");
         CLOSE_SOCKET(serverSocket);
         return false;
@@ -467,6 +467,15 @@ void ApiService::runCleanup() {
 }
 
 std::string ApiService::processRequestFromRaw(const std::string& rawRequest, const std::string& clientIP) {
+    // ПРОВЕРКА RATE LIMITING
+    if (!rateLimiter.isAllowed(clientIP, apiConfig.rateLimitRequests, 
+                               std::chrono::seconds(apiConfig.rateLimitWindow))) {
+        Logger::getInstance().log("🚫 Rate limit exceeded для " + clientIP + 
+                                 ": " + std::to_string(apiConfig.rateLimitRequests) + 
+                                 " запросов за " + std::to_string(apiConfig.rateLimitWindow) + " сек", "WARNING");
+        return createJsonResponse("{\"success\": false, \"error\": \"Too many requests, please try again later\"}", 429);
+    }
+    
     // ПРОВЕРКА НА МИНИМАЛЬНО ВАЛИДНЫЙ HTTP ЗАПРОС
     if (rawRequest.length() < 14) {
         Logger::getInstance().log("❌ Слишком короткий запрос от " + clientIP + ": " + std::to_string(rawRequest.length()) + " байт", "WARNING");
@@ -973,9 +982,6 @@ std::string ApiService::createJsonResponse(const std::string& content, int statu
         return "HTTP/1.1 500 Internal Server Error\r\n"
                "Content-Type: application/json\r\n"
                "Content-Length: 47\r\n"
-               "Access-Control-Allow-Origin: *\r\n"
-               "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
-               "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
                "\r\n"
                R"({"success":false,"error":"Empty response"})";
     }
@@ -990,6 +996,7 @@ std::string ApiService::createJsonResponse(const std::string& content, int statu
         case 404: statusText = "Not Found"; break;
         case 405: statusText = "Method Not Allowed"; break;
         case 413: statusText = "Payload Too Large"; break;
+        case 429: statusText = "Too Many Requests"; break;
         case 500: statusText = "Internal Server Error"; break;
         case 505: statusText = "HTTP Version Not Supported"; break;
         default: statusText = "OK";
@@ -997,11 +1004,16 @@ std::string ApiService::createJsonResponse(const std::string& content, int statu
     
     std::stringstream response;
     response << "HTTP/1.1 " << statusCode << " " << statusText << "\r\n"
-             << "Content-Type: application/json\r\n"
-             << "Access-Control-Allow-Origin: *\r\n"
-             << "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
-             << "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
-             << "Content-Length: " << content.length() << "\r\n"
+             << "Content-Type: application/json\r\n";
+    
+    // ДОБАВЛЯЕМ CORS ЗАГОЛОВКИ ТОЛЬКО ЕСЛИ ВКЛЮЧЕНЫ
+    if (apiConfig.enableCors) {
+        response << "Access-Control-Allow-Origin: " << apiConfig.corsOrigin << "\r\n"
+                 << "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
+                 << "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n";
+    }
+    
+    response << "Content-Length: " << content.length() << "\r\n"
              << "\r\n"
              << content;
     
@@ -1045,14 +1057,14 @@ std::string ApiService::getUserIdFromSession(const std::string& token) {
 std::string ApiService::handleStatus() {
     json response;
     response["status"] = "running";
-    response["version"] = "0.0.37";
+    response["version"] = "0.0.34";
     response["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     
     return createJsonResponse(response.dump());
 }
 
-// НОВАЯ ФУНКЦИЯ ДЛЯ ОТЗЫВА СЕССИИ ПО ТОКЕНУ В URL
+// функция отзыва сессии
 std::string ApiService::handleRevokeSessionByToken(const std::string& targetToken, const std::string& sessionToken) {
     std::string userId = getUserIdFromSession(sessionToken);
 

@@ -34,10 +34,6 @@ std::string ApiService::handleAddStudent(const std::string& body) {
         }
         
         if (dbService.addStudent(student)) {
-            if (student.groupId > 0) {
-                dbService.updateGroupStudentCount(student.groupId, 1);
-            }
-            
             json response;
             response["success"] = true;
             response["message"] = "Студент успешно добавлен";
@@ -94,31 +90,13 @@ std::string ApiService::handleUpdateStudent(const std::string& body, int student
             return createJsonResponse(errorResponse.dump(), 400);
         }
         
-        if (oldStudent.groupId != newStudent.groupId) {
-            if (oldStudent.groupId > 0) {
-                dbService.updateGroupStudentCount(oldStudent.groupId, -1);
-            }
-            
-            if (newStudent.groupId > 0) {
-                dbService.updateGroupStudentCount(newStudent.groupId, 1);
-            }
-        }
-        
+        // Обновление счетчиков происходит внутри транзакции в updateStudent()
         if (dbService.updateStudent(newStudent)) {
             json response;
             response["success"] = true;
             response["message"] = "Студент успешно обновлен.";
             return createJsonResponse(response.dump());
         } else {
-            if (oldStudent.groupId != newStudent.groupId) {
-                if (oldStudent.groupId > 0) {
-                    dbService.updateGroupStudentCount(oldStudent.groupId, 1);
-                }
-                if (newStudent.groupId > 0) {
-                    dbService.updateGroupStudentCount(newStudent.groupId, -1);
-                }
-            }
-            
             json errorResponse;
             errorResponse["success"] = false;
             errorResponse["error"] = "Ошибка обновления студента.";
@@ -136,10 +114,6 @@ std::string ApiService::handleDeleteStudent(int studentId) {
     Student student = dbService.getStudentById(studentId);
     
     if (dbService.deleteStudent(studentId)) {
-        if (student.groupId > 0) {
-            dbService.updateGroupStudentCount(student.groupId, -1);
-        }
-        
         json response;
         response["success"] = true;
         response["message"] = "Студент успешно удален.";

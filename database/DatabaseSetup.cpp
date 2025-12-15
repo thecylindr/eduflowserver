@@ -61,12 +61,12 @@ bool DatabaseService::setupDatabase() {
     std::vector<std::string> sqlCommands = {
         "CREATE TABLE IF NOT EXISTS teachers ("
         "teacher_id SERIAL PRIMARY KEY,"
-        "last_name VARCHAR(100) NOT NULL,"
-        "first_name VARCHAR(100) NOT NULL,"
-        "middle_name VARCHAR(100),"
+        "last_name VARCHAR(50) NOT NULL,"
+        "first_name VARCHAR(50) NOT NULL,"
+        "middle_name VARCHAR(50),"
         "experience INTEGER NOT NULL,"
         "specialization SERIAL UNIQUE,"
-        "email VARCHAR(100),"
+        "email TEXT,"
         "phone_number VARCHAR(11))",
 
         "CREATE TABLE IF NOT EXISTS specialization_list ("
@@ -82,11 +82,11 @@ bool DatabaseService::setupDatabase() {
         
         "CREATE TABLE IF NOT EXISTS students ("
         "student_code SERIAL PRIMARY KEY,"
-        "last_name VARCHAR(100) NOT NULL,"
-        "first_name VARCHAR(100) NOT NULL,"
-        "middle_name VARCHAR(100),"
+        "last_name VARCHAR(50) NOT NULL,"
+        "first_name VARCHAR(50) NOT NULL,"
+        "middle_name VARCHAR(50),"
         "phone_number VARCHAR(11),"
-        "email VARCHAR(100),"
+        "email TEXT,"
         "group_id INTEGER REFERENCES student_groups(group_id),"
         "passport_series VARCHAR(10) NOT NULL,"
         "passport_number VARCHAR(10) NOT NULL)",
@@ -110,17 +110,17 @@ bool DatabaseService::setupDatabase() {
         
         "CREATE TABLE IF NOT EXISTS event_categories ("
         "event_code INTEGER PRIMARY KEY REFERENCES event(event_decode) ON DELETE CASCADE ON UPDATE CASCADE,"
-        "category VARCHAR(64))",
+        "category VARCHAR(64) NOT NULL)",
         
         "CREATE TABLE IF NOT EXISTS users ("
         "user_id SERIAL PRIMARY KEY,"
-        "email VARCHAR(100) UNIQUE NOT NULL,"
+        "email TEXT UNIQUE NOT NULL,"
         "login VARCHAR(24) NOT NULL,"
         "phone_number VARCHAR(11),"
         "password_hash TEXT NOT NULL,"
-        "last_name VARCHAR(100) NOT NULL,"
-        "first_name VARCHAR(100) NOT NULL,"
-        "middle_name VARCHAR(100))",
+        "last_name VARCHAR(50) NOT NULL,"
+        "first_name VARCHAR(50) NOT NULL,"
+        "middle_name VARCHAR(50))",
 
         "CREATE TABLE IF NOT EXISTS sessions ("
         "session_id SERIAL PRIMARY KEY,"
@@ -128,7 +128,7 @@ bool DatabaseService::setupDatabase() {
         "user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,"
         "created_at TIMESTAMP NOT NULL,"
         "last_activity TIMESTAMP NOT NULL,"
-        "ip_address VARCHAR(45),"
+        "ip_address VARCHAR(24),"
         "user_agent TEXT,"
         "expires_at TIMESTAMP NOT NULL);"
     };
