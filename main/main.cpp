@@ -42,8 +42,8 @@ namespace Colors {
 enum class MessageType {
     INFO,
     SUCCESS,
-    ERROR,
-    WARNING
+    ERR,
+    WARN
 };
 
 class Application {
@@ -90,10 +90,10 @@ public:
             case MessageType::SUCCESS:
                 color = Colors::GREEN;
                 break;
-            case MessageType::ERROR:
+            case MessageType::ERR:
                 color = Colors::RED;
                 break;
-            case MessageType::WARNING:
+            case MessageType::WARN:
                 color = Colors::YELLOW;
                 break;
             default:
@@ -124,14 +124,14 @@ public:
         } else if (choice == "2") {
             newLanguage = "ru";
         } else {
-            showMessage(MessageType::ERROR, tr("invalid_choice"));
+            showMessage(MessageType::ERR, tr("invalid_choice"));
             waitForEnter();
             return;
         }
         
         auto newLocale = LocaleManager::loadLocale(newLanguage);
         if (newLocale.empty()) {
-            showMessage(MessageType::ERROR, tr("language_load_failed"));
+            showMessage(MessageType::ERR, tr("language_load_failed"));
         } else {
             locale = newLocale;
             
@@ -155,7 +155,7 @@ public:
         std::cout << std::endl;
         
         std::cout << Colors::CYAN << "1. 📄 " << tr("view_last_logs") << Colors::RESET << std::endl;
-        std::cout << Colors::CYAN << "2. 🗑️  " << tr("clear_all_logs") << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "2. 🗑  " << tr("clear_all_logs") << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "3. 📁 " << tr("show_log_path") << Colors::RESET << std::endl;
         std::cout << Colors::RED << "Q. ↩️  " << tr("back") << Colors::RESET << std::endl;
         
@@ -172,7 +172,7 @@ public:
         } else if (choice == "Q" || choice == "q") {
             break;
         } else {
-            showMessage(MessageType::ERROR, tr("invalid_choice"));
+            showMessage(MessageType::ERR, tr("invalid_choice"));
             waitForEnter();
         }
     }
@@ -193,9 +193,9 @@ public:
             
             for (const auto& log : logs) {
                 // Раскрашиваем логи по уровню
-                if (log.find("[ERROR]") != std::string::npos) {
+                if (log.find("[ERR]") != std::string::npos) {
                     std::cout << Colors::RED << log << Colors::RESET << std::endl;
-                } else if (log.find("[WARNING]") != std::string::npos) {
+                } else if (log.find("[WARN]") != std::string::npos) {
                     std::cout << Colors::YELLOW << log << Colors::RESET << std::endl;
                 } else {
                     std::cout << Colors::WHITE << log << Colors::RESET << std::endl;
@@ -255,7 +255,7 @@ public:
             
             // Статус системы
             std::cout << Colors::MAGENTA << "📊 " << tr("system_status") << ":" << Colors::RESET << std::endl;
-            std::cout << "   🗄️  " << tr("database") << ": " 
+            std::cout << "   🗄  " << tr("database") << ": " 
                       << (dbService.testConnection() ? Colors::GREEN + "✅ " + tr("connected") : Colors::RED + "❌ " + tr("disconnected")) 
                       << Colors::RESET << std::endl;
             std::cout << "   🌐 " << tr("api_server") << ": " 
@@ -304,7 +304,7 @@ public:
                 exitApplication();
                 break;
             } else {
-                showMessage(MessageType::ERROR, tr("invalid_choice"));
+                showMessage(MessageType::ERR, tr("invalid_choice"));
                 waitForEnter();
             }
         }
@@ -321,7 +321,7 @@ private:
         std::cout << Colors::MAGENTA << "📄 " << tr("current_settings") << ":" << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   📍 " << tr("host") << ": " << Colors::WHITE << currentConfig.host << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   🚪 " << tr("port") << ": " << Colors::WHITE << currentConfig.port << Colors::RESET << std::endl;
-        std::cout << Colors::CYAN << "   🗄️  " << tr("database_name") << ": " << Colors::WHITE << currentConfig.database << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "   🗄  " << tr("database_name") << ": " << Colors::WHITE << currentConfig.database << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   👤 " << tr("username") << ": " << Colors::WHITE << currentConfig.username << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "   🔒 " << tr("password") << ": " << Colors::WHITE << std::string(currentConfig.password.length(), '*') << Colors::RESET << std::endl;
         
@@ -360,7 +360,7 @@ private:
             if (configManager.saveConfig(currentConfig)) {
                 showMessage(MessageType::SUCCESS, tr("settings_saved"));
             } else {
-                showMessage(MessageType::ERROR, "Failed to save settings");
+                showMessage(MessageType::ERR, "Failed to save settings");
             }
         }
 
@@ -371,10 +371,10 @@ private:
             if (dbService.setupDatabase()) {
                 showMessage(MessageType::SUCCESS, tr("db_setup_success"));
             } else {
-                showMessage(MessageType::ERROR, tr("db_setup_error"));
+                showMessage(MessageType::ERR, tr("db_setup_ERR"));
             }
         } else {
-            showMessage(MessageType::ERROR, tr("connection_error"));
+            showMessage(MessageType::ERR, tr("connection_ERR"));
             showMessage(MessageType::INFO, tr("check_settings"));
         }
 
@@ -435,10 +435,10 @@ private:
                 showMessage(MessageType::SUCCESS, tr("api_settings_saved"));
                 
                 if (apiRunning) {
-                    showMessage(MessageType::WARNING, tr("api_restart_required"));
+                    showMessage(MessageType::WARN, tr("api_restart_required"));
                 }
             } else {
-                showMessage(MessageType::ERROR, "Failed to save API settings");
+                showMessage(MessageType::ERR, "Failed to save API settings");
             }
         }
 
@@ -504,10 +504,10 @@ private:
                     std::cout << Colors::CYAN << "   📁 GET /portfolio  - " << Colors::WHITE << "Portfolio management" << Colors::RESET << std::endl;
                     std::cout << Colors::CYAN << "   📰 GET /news       - " << Colors::WHITE << "News articles (read-only)" << Colors::RESET << std::endl;
                 } else {
-                    showMessage(MessageType::ERROR, tr("api_start_error"));
+                    showMessage(MessageType::ERR, tr("api_start_ERR"));
                 }
             } else {
-                showMessage(MessageType::ERROR, tr("db_unavailable"));
+                showMessage(MessageType::ERR, tr("db_unavailable"));
                 showMessage(MessageType::INFO, tr("setup_db_first"));
             }
         }
@@ -521,8 +521,8 @@ private:
         drawHeader(tr("system_info_title"));
         
         std::cout << Colors::CYAN << "🎯 " << tr("app_title") << ": " << Colors::WHITE << "1.0" << Colors::RESET << std::endl;
-        std::cout << Colors::CYAN << "🖥️  Platform: " << Colors::WHITE << "Windows/Linux" << Colors::RESET << std::endl;
-        std::cout << Colors::CYAN << "🗄️  Database: " << Colors::WHITE << "PostgreSQL 12+" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "🖥  Platform: " << Colors::WHITE << "Windows/Linux" << Colors::RESET << std::endl;
+        std::cout << Colors::CYAN << "🗄  Database: " << Colors::WHITE << "PostgreSQL 12+" << Colors::RESET << std::endl;
         std::cout << Colors::CYAN << "💻 Programming Language: " << Colors::WHITE << "C++17" << Colors::RESET << std::endl;
         
         std::cout << std::endl << Colors::MAGENTA << "📚 Used Libraries:" << Colors::RESET << std::endl;
@@ -571,7 +571,7 @@ private:
             std::cout << Colors::CYAN << "1. 📰 " << tr("news_list") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "2. ✏️  " << tr("news_create") << Colors::RESET << std::endl;
             std::cout << Colors::CYAN << "3. 🔄 " << tr("news_edit") << Colors::RESET << std::endl;
-            std::cout << Colors::CYAN << "4. 🗑️  " << tr("news_delete") << Colors::RESET << std::endl;
+            std::cout << Colors::CYAN << "4. 🗑  " << tr("news_delete") << Colors::RESET << std::endl;
             std::cout << Colors::RED << "Q. ↩️  " << tr("back") << Colors::RESET << std::endl;
             
             std::cout << std::endl << Colors::YELLOW << "🎯 " << tr("choose_option") << ": " << Colors::RESET;
@@ -605,10 +605,10 @@ private:
                         std::string filename = articles[num-1];
                         articleEditor.editArticle(filename);
                     } else {
-                        showMessage(MessageType::ERROR, tr("invalid_article_number"));
+                        showMessage(MessageType::ERR, tr("invalid_article_number"));
                     }
                 } catch (...) {
-                    showMessage(MessageType::ERROR, tr("invalid_article_number"));
+                    showMessage(MessageType::ERR, tr("invalid_article_number"));
                 }
             } else if (choice == "4") {
                 articleEditor.listArticles();
@@ -633,20 +633,20 @@ private:
                             if (std::filesystem::remove(filename)) {
                                 showMessage(MessageType::SUCCESS, tr("article_deleted"));
                             } else {
-                                showMessage(MessageType::ERROR, "Ошибка удаления статьи");
+                                showMessage(MessageType::ERR, "Ошибка удаления статьи");
                             }
                         }
                     } else {
-                        showMessage(MessageType::ERROR, tr("invalid_article_number"));
+                        showMessage(MessageType::ERR, tr("invalid_article_number"));
                     }
                 } catch (...) {
-                    showMessage(MessageType::ERROR, tr("invalid_article_number"));
+                    showMessage(MessageType::ERR, tr("invalid_article_number"));
                 }
                 waitForEnter();
             } else if (choice == "Q" || choice == "q") {
                 break;
             } else {
-                showMessage(MessageType::ERROR, tr("invalid_choice"));
+                showMessage(MessageType::ERR, tr("invalid_choice"));
                 waitForEnter();
             }
         }
